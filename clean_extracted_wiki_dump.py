@@ -9,7 +9,7 @@ import argparse
 OPEN_DOC_TAG_AND_TITLE = re.compile("^<doc.*>\n.*\n", re.MULTILINE)
 EMPTY_LINES = re.compile("^\n", re.MULTILINE)
 CLOSE_DOC_TAG = re.compile("^</doc>$", re.MULTILINE)
-END_OF_SENTENCE = re.compile("(?<=\w\w[.?!]) *(?=[A-Z])")
+END_OF_SENTENCE = re.compile("(?<=\w[\w\")][.?!]) *(?=[A-Z])")
 
 
 def read_files(language):

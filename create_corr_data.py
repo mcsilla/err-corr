@@ -20,9 +20,10 @@ if __name__ == "__main__":
     character_tokenizer = BertTokenizerFast(BASE_DIR / "data/tokenizer/alphabet", do_lower_case=False)
     max_line_lengths = []
     for lines in read_files():
-        # max_index = np.argmax([len(character_tokenizer.tokenize(line)) for line in lines])
+        max_index = np.argmax([len(character_tokenizer.tokenize(line)) for line in lines])
         max_line_lengths.append(max([len(character_tokenizer.tokenize(line)) for line in lines]))
         print(max_line_lengths)
+        print(lines[max_index])
         break
     max_line_length = max(max_line_lengths)
     print(max_line_length)
