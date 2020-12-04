@@ -7,9 +7,11 @@ import multiprocessing
 import argparse
 
 OPEN_DOC_TAG_AND_TITLE = re.compile("^<doc.*>\n.*\n", re.MULTILINE)
-EMPTY_LINES = re.compile("^\n", re.MULTILINE)
+EMPTY_LINES = re.compile("^\s*\n", re.MULTILINE)
 CLOSE_DOC_TAG = re.compile("^</doc>$", re.MULTILINE)
-END_OF_SENTENCE = re.compile("(?<=\w[\w\")][.?!]) *(?=[A-Z])")
+END_OF_SENTENCE = re.compile("(?<=[\w\"”)\.][\w\"” )][.?!]) +(?=[A-Z\"])")
+BAD_NEW_LINE = re.compile("(?<=[^.?!])\n", re.MULTILINE)
+BR_TAG = re.compile("<br>", re.MULTILINE)
 
 
 def read_files(language):
@@ -25,9 +27,12 @@ def read_files(language):
 def clean_lines(content):
     rules = (
         lambda content: OPEN_DOC_TAG_AND_TITLE.sub("", content),
-        lambda content: EMPTY_LINES.sub("", content),
         lambda content: CLOSE_DOC_TAG.sub("", content),
-        lambda content: END_OF_SENTENCE.sub("\n", content)
+        lambda content: BAD_NEW_LINE.sub(" ", content),
+        lambda content: BR_TAG.sub("\n", content),
+        lambda content: END_OF_SENTENCE.sub("\n", content),
+        lambda content: EMPTY_LINES.sub("", content),
+        
     )
     for rule in rules:
         content = rule(content)

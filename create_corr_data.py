@@ -21,9 +21,13 @@ if __name__ == "__main__":
     max_line_lengths = []
     for lines in read_files():
         max_index = np.argmax([len(character_tokenizer.tokenize(line)) for line in lines])
+        sorted_indices = np.argsort([len(character_tokenizer.tokenize(line)) for line in lines])
         max_line_lengths.append(max([len(character_tokenizer.tokenize(line)) for line in lines]))
         print(max_line_lengths)
         print(lines[max_index])
+        for i in sorted_indices[10:20]:
+            print(f'A: {lines[i-1]} B: {lines[i]} C: {lines[i+1]} \n')
+        print(np.sort([len(character_tokenizer.tokenize(line)) for line in lines])[10:20])
         break
     max_line_length = max(max_line_lengths)
     print(max_line_length)
