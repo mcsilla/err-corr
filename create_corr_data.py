@@ -27,7 +27,7 @@ if __name__ == "__main__":
         print(lines[max_index])
         for i in sorted_indices[10:20]:
             print(f'A: {lines[i-1]} B: {lines[i]} C: {lines[i+1]} \n')
-        print(np.sort([len(character_tokenizer.tokenize(line)) for line in lines])[10:20])
+        print(np.sort([len(character_tokenizer.tokenize(line)) for line in lines])[-20:])
         break
     max_line_length = max(max_line_lengths)
     print(max_line_length)
