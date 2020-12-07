@@ -7,6 +7,8 @@ import json
 
 SPEC_TOKENS = ['[CLS]', '[SEP]', '[MASK]', '[PAD]', '[UNK]']
 BASE_DIR = Path(__file__).parent
+MIN_FREQ = 2
+SIZE_OF_ALPHABET = 200
 
 def read_vocab(file_path = "data/tokenizer/vocab"):
     with open(BASE_DIR / file_path, "r") as f:
@@ -42,18 +44,18 @@ def main(language):
 
     # prepare text files to train vocab on them
     # use only one subdir
-    files = [str(file_path) for file_path in cleaned_dir.glob("AA/wiki_*")]
-    # # use all wiki articles (in the given language)
-    # files = [str(file_path) for file_path in cleaned_dir.glob("**/wiki_*")]
+    # files = [str(file_path) for file_path in cleaned_dir.glob("AA/wiki_*")]
+    # use all wiki articles (in the given language)
+    files = [str(file_path) for file_path in cleaned_dir.glob("**/wiki_*")]
 
     # train BERT tokenizer
     tokenizer.train(
         files,
         # vocab_size=100, # default value is 30000
-        min_frequency=2,
+        min_frequency=MIN_FREQ,
         show_progress=True,
         special_tokens=SPEC_TOKENS,
-        # limit_alphabet=1000, # default value is 1000
+        limit_alphabet=SIZE_OF_ALPHABET, # default value is 1000
         wordpieces_prefix="##"
     )
 

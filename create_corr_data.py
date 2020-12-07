@@ -16,6 +16,9 @@ def read_files(language = LANGUAGE):
         with open(file_path) as f:
            yield f.readlines()
 
+def make_errors():
+    pass
+
 if __name__ == "__main__":
     character_tokenizer = BertTokenizerFast(BASE_DIR / "data/tokenizer/alphabet", do_lower_case=False)
     max_line_lengths = []
