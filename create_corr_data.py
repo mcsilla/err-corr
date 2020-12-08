@@ -32,8 +32,12 @@ class CorrectionDatasetGenerator:
         correct_tokens = []
         error_tokens = []
         for repl_from, repl_to in itertools.zip_longest(tokens1, tokens2):
+            # it was probably wrong
             if repl_to is None:
-                correct_tokens[-1][1] = repl_from
+                if correct_tokens[-1][1] == self.tokenizer.pad_token:
+                    correct_tokens[-1][1] = repl_from
+                else:
+                    correct_tokens[-1][2] = repl_from
                 continue
             if repl_from is None:
                 repl_from = self.tokenizer.pad_token
@@ -41,37 +45,19 @@ class CorrectionDatasetGenerator:
             correct_tokens.append([repl_from, self.tokenizer.pad_token, self.tokenizer.pad_token])
         return correct_tokens, error_tokens
 
-    @staticmethod
-    def error_table_correct_tokenized(tokenized_chars):
-        corrected = []
-        last_pad = False
-        for c in tokenized_chars:
-            if last_pad and not (c.startswith("##") or c == "[PAD]"):
-                c = f"##{c}"
-            corrected.append(c)
-            last_pad = False
-            if c == "[PAD]":
-                last_pad = True
-        return tuple(corrected)
-
-
     def add_to_error_table(self, chars1, chars2, error_table, correction_table):
-        tokenized_chars1 = self.error_table_correct_tokenized(self.tokenizer.tokenize(chars1))
-        tokenized_chars2 = self.error_table_correct_tokenized(self.tokenizer.tokenize(chars2))
+        tokenized_chars1 = tuple(self.tokenizer.tokenize(chars1))
+        tokenized_chars2 = tuple(self.tokenizer.tokenize(chars2))
         if "[UNK]" in tokenized_chars2 or "[UNK]" in tokenized_chars1:
             return
-        chars1_no_pad = tuple(c for c in tokenized_chars1 if c != "[PAD]")
-        chars2_no_pad = tuple(c for c in tokenized_chars2 if c != "[PAD]")
-        error_table[chars1_no_pad].append(chars2_no_pad)
-        correction_table[chars1_no_pad, chars2_no_pad] = self.create_correction(tokenized_chars1,
+        error_table[tokenized_chars1].append(tokenized_chars2)
+        correction_table[tokenized_chars1, tokenized_chars2] = self.create_correction(tokenized_chars1,
                                                                                 tokenized_chars2)
         if "##" + tokenized_chars1[0] in self.vocab_set and "##" + tokenized_chars2[0] in self.vocab_set:
             tokenized_chars1_hash = tuple(["##" + tokenized_chars1[0]] + list(tokenized_chars1[1:]))
             tokenized_chars2_hash = tuple(["##" + tokenized_chars2[0]] + list(tokenized_chars2[1:]))
-            chars1_hash_no_pad = tuple(c for c in tokenized_chars1_hash if c != "[PAD]")
-            chars2_hash_no_pad = tuple(c for c in tokenized_chars2_hash if c != "[PAD]")
-            error_table[chars1_hash_no_pad].append(chars2_hash_no_pad)
-            correction_table[chars1_hash_no_pad, chars2_hash_no_pad] = self.create_correction(
+            error_table[tokenized_chars1_hash].append(tokenized_chars2_hash)
+            correction_table[tokenized_chars1_hash, tokenized_chars2_hash] = self.create_correction(
                 tokenized_chars1_hash, tokenized_chars2_hash)
 
     def create_error_table_from_file(self, file_path):
@@ -88,7 +74,7 @@ class CorrectionDatasetGenerator:
                         continue
                     self.add_to_error_table(chars1, chars2, error_table, correction_table)
 
-        print(error_table)
+        print(correction_table)
         return error_table, correction_table
 
     def run(self, tokens):
