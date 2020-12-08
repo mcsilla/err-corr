@@ -8,7 +8,7 @@ import json
 SPEC_TOKENS = ['[CLS]', '[SEP]', '[MASK]', '[PAD]', '[UNK]']
 BASE_DIR = Path(__file__).parent
 MIN_FREQ = 2
-SIZE_OF_ALPHABET = 200
+SIZE_OF_ALPHABET = 180
 
 def read_vocab(file_path = "data/tokenizer/vocab"):
     with open(BASE_DIR / file_path, "r") as f:
