@@ -16,6 +16,19 @@ from transformers import BertTokenizerFast
 from official.nlp.bert.tokenization import _is_punctuation
 
 
+def detokenize_char(char_token):
+    if char_token.startswith("##"):
+        return char_token[2:]
+    else:
+        return (" " + char_token)
+
+def corrected_tokenizer(sequence, tokenizer):
+    ids_object = tokenizer(text="a" + sequence, padding='max_length', max_length=SEQ_LENGTH + 1)
+    for key in ids_object:
+        ids_object[key] = ids_object[key][:1] + ids_object[key][2:]
+    return ids_object
+
+
 class CorrectionDatasetGenerator:
     error_frequency = 0.15
     sparse_frequency = 0.2
@@ -74,10 +87,11 @@ class CorrectionDatasetGenerator:
                         continue
                     self.add_to_error_table(chars1, chars2, error_table, correction_table)
 
-        print(correction_table)
+        # print(correction_table)
         return error_table, correction_table
 
-    def run(self, tokens):
+    def run(self, tokens, doc):
+        error_text = []
         error_tokens = []
         correct_tokens = []
         token_idx = 0
@@ -86,7 +100,7 @@ class CorrectionDatasetGenerator:
             if random.random() < self.error_frequency: # random.random() in [0, 1)
                 # Random
                 if random.random() < 0.1:
-                    error_tokens.append(random.choice(self.vocab))
+                    error_tokens.append(random.choice(self.vocab)) # can it be special token?
                     correct_tokens.append([tokens[token_idx], self.tokenizer.pad_token, self.tokenizer.pad_token])
                     token_idx += 1
                 # Deletion
@@ -192,45 +206,33 @@ def generate_dataset(tokenizer, correction_dataset_generator, dataset_dir):
                         document = ""
                         if not tokens:
                             continue
-                        all_modified_tokens, all_corrected_tokens = correction_dataset_generator.run(tokens)
-                        with open("output.txt", 'a') as f:
-                                original = sys.stdout
-                                sys.stdout = f
-                                print("All tokens A:")
-                                print(all_modified_tokens, "\n\n", all_corrected_tokens, "\n\n")
-                                sys.stdout = original
+                        all_modified_tokens, all_corrected_tokens = correction_dataset_generator.run(tokens, doc)
                         input_len = len(all_modified_tokens)
                         for start_index in range(0, input_len, SEQ_LENGTH - 2):
-                            modified_tokens = all_modified_tokens[start_index:start_index + SEQ_LENGTH - 2] # ? end can be out of range
+                            modified_tokens = all_modified_tokens[start_index:start_index + SEQ_LENGTH - 2]
                             corrected_tokens = all_corrected_tokens[start_index:start_index + SEQ_LENGTH - 2]
-                            # isn't cls and sep id added automatically ?
-                            modified_input_ids = [tokenizer.cls_token_id] + \
-                                tokenizer.convert_tokens_to_ids(modified_tokens) + \
-                                [tokenizer.sep_token_id]
-                            instance_input_len = len(modified_input_ids)
-                            instance_input_ids = np.pad(modified_input_ids, (0, SEQ_LENGTH - instance_input_len),
-                                                        constant_values=(0, 0))
-                            instance_attention_mask = np.concatenate((
-                                np.ones(instance_input_len, dtype=np.int32),
-                                np.zeros(SEQ_LENGTH - instance_input_len, dtype=np.int32)
-                            ))
-                            instance_token_type_ids = np.zeros(SEQ_LENGTH, dtype=np.int32)
-                            corrected_input_ids = [[tokenizer.pad_token_id, tokenizer.pad_token_id,
-                                                    tokenizer.pad_token_id]]
-                            for corrected_token in corrected_tokens:
-                                corrected_token_id = tokenizer.convert_tokens_to_ids(corrected_token)
-                                corrected_input_ids.append(corrected_token_id)
-                            corrected_input_ids.append([tokenizer.pad_token_id, tokenizer.pad_token_id,
-                                                        tokenizer.pad_token_id])
+                            modified_chars = [detokenize_char(token) for token in modified_tokens]
+                            # dictionary with keys: 'input_ids', 'attention_mask', 'token_type_ids'
+                            inputs = corrected_tokenizer("".join(modified_chars), tokenizer)
+                            instance_input_ids = inputs["input_ids"]
+                            instance_attention_mask = inputs["attention_mask"]
+                            instance_token_type_ids = inputs["token_type_ids"]
+                            corrected_input_ids = list(map(tokenizer.convert_tokens_to_ids, corrected_tokens))
+                            corrected_input_ids = np.pad(corrected_input_ids,
+                                                         [(1, 1), (0, 0)],
+                                                         constant_values=tokenizer.pad_token_id)
+                            instance_input_len = len(modified_tokens) + 2
                             corrected_input_ids = np.pad(corrected_input_ids,
                                                          [(0, SEQ_LENGTH - instance_input_len), (0, 0)],
-                                                         constant_values=((0, -100), (0, 0)))
+                                                         constant_values=-100)
                             corrected_input_ids = np.swapaxes(corrected_input_ids, 0, 1)
                             with open("output.txt", 'a') as f:
                                 original = sys.stdout
                                 sys.stdout = f
                                 print("Output of generate_dataset()\n")
-                                print(instance_input_ids, "\n", instance_attention_mask, "\n", instance_token_type_ids, "\n\n",\
+                                print(instance_input_ids, "\n\n",\
+                                    instance_attention_mask, "\n\n",\
+                                    instance_token_type_ids, "\n\n",\
                                     corrected_input_ids[0], "\n", corrected_input_ids[1], "\n", corrected_input_ids[2], "\n\n")
                                 sys.stdout = original
                             yield (instance_input_ids, instance_attention_mask, instance_token_type_ids), \
@@ -268,7 +270,7 @@ if __name__ == '__main__':
 
     SEQ_LENGTH = args.sequence_length
     # character_tokenizer = BertTokenizerFast.from_pretrained(args.tokenizer_config) # why is from_pretrained needed? 
-    character_tokenizer = BertTokenizerFast("config/vocab.txt", do_lower_case=False)
+    character_tokenizer = BertTokenizerFast("config/vocab.txt", do_lower_case=False) 
     dataset_generator = CorrectionDatasetGenerator(character_tokenizer)
     writer = tf.io.TFRecordWriter(args.output_file, options="GZIP")
     logging.basicConfig(level=logging.INFO)
