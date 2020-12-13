@@ -19,8 +19,12 @@ from official.nlp.bert.tokenization import _is_punctuation
 def detokenize_char(char_token):
     if char_token.startswith("##"):
         return char_token[2:]
-    else:
-        return (" " + char_token)
+    if char_token in set(['[CLS]', '[SEP]', '[MASK]', '[PAD]', '[UNK]']):
+        return char_token
+    if _is_punctuation(char_token):
+        return char_token
+    return (" " + char_token)
+
 
 def corrected_tokenizer(sequence, tokenizer):
     ids_object = tokenizer(text="a" + sequence, padding='max_length', max_length=SEQ_LENGTH + 1)
@@ -31,13 +35,14 @@ def corrected_tokenizer(sequence, tokenizer):
 
 class CorrectionDatasetGenerator:
     error_frequency = 0.15
+    dense_frequency = 0.2
     sparse_frequency = 0.2
     common_extra_chars = "{}jli;|\\/(:)!1.t'"
     hyphens = "\xad-"
 
     def __init__(self, _tokenizer):
-        self.vocab = sorted(_tokenizer.get_vocab().keys()) 
-        self.vocab_set = set(self.vocab)
+        self.vocab_set = set(_tokenizer.get_vocab().keys()).difference(set(['[CLS]', '[SEP]', '[MASK]', '[PAD]', '[UNK]']))
+        self.vocab = sorted(self.vocab_set)
         self.tokenizer = _tokenizer
         self.error_table, self.correction_table = self.create_error_table_from_file("ocr_errors.txt")
 
@@ -186,14 +191,24 @@ class CorrectionDatasetGenerator:
                         if error_tokens[token_idx].startswith("##"):
                             error_tokens[token_idx] = error_tokens[token_idx][2:]
 
+        for sequence_start in range(0, len(error_tokens), SEQ_LENGTH - 2):
+            if random.random() < self.dense_frequency:
+                for dense_idx in range(0, 10):
+                    dense_start = random.randint(sequence_start,
+                                                  min(sequence_start + SEQ_LENGTH - 2, len(error_tokens)))
+                    dense_length = random.randint(1, 20)
+                    for token_idx in range(dense_start, min(dense_start + dense_length, len(error_tokens))):
+                        if len(error_tokens[token_idx]) == 1 and "##" + error_tokens[token_idx] in self.vocab_set:
+                            error_tokens[token_idx] = "##" + error_tokens[token_idx]
+
         return error_tokens, correct_tokens
 
 
 def generate_dataset(tokenizer, correction_dataset_generator, dataset_dir):
-    # print('generate_dataset')
-    input_files = tf.io.gfile.glob(dataset_dir + "/input_file.txt")
-    # print(input_files)
-    # random.shuffle(input_files)
+    input_files = tf.io.gfile.glob(dataset_dir + "*/*")
+    # input_files = tf.io.gfile.glob(dataset_dir + "*/wiki_*")
+    print(input_files)
+    random.shuffle(input_files)
     open('output.txt', 'w').close()
     for input_file in input_files:
         with tf.io.gfile.GFile(input_file, mode='r') as inf:
@@ -226,15 +241,6 @@ def generate_dataset(tokenizer, correction_dataset_generator, dataset_dir):
                                                          [(0, SEQ_LENGTH - instance_input_len), (0, 0)],
                                                          constant_values=-100)
                             corrected_input_ids = np.swapaxes(corrected_input_ids, 0, 1)
-                            with open("output.txt", 'a') as f:
-                                original = sys.stdout
-                                sys.stdout = f
-                                print("Output of generate_dataset()\n")
-                                print(instance_input_ids, "\n\n",\
-                                    instance_attention_mask, "\n\n",\
-                                    instance_token_type_ids, "\n\n",\
-                                    corrected_input_ids[0], "\n", corrected_input_ids[1], "\n", corrected_input_ids[2], "\n\n")
-                                sys.stdout = original
                             yield (instance_input_ids, instance_attention_mask, instance_token_type_ids), \
                                   (corrected_input_ids[0], corrected_input_ids[1], corrected_input_ids[2])
 
@@ -247,7 +253,8 @@ def int64feature(int_list):
 
 
 def printable_format(tokenizer, token_ids):
-    return tokenizer.convert_ids_to_tokens([token_id for token_id in token_ids if token_id >= 0])
+    tokens = tokenizer.convert_ids_to_tokens([token_id for token_id in token_ids if token_id >= 0])
+    return "".join([detokenize_char(token) for token in tokens])
 
 
 def write_examples_to_tfrecord(examples, tf_records_writer):
@@ -264,13 +271,13 @@ if __name__ == '__main__':
     parser.add_argument('--output_file', type=str, required=True)
     # parser.add_argument('--tokenizer_config', type=str, required=True)
     parser.add_argument('--sequence_length', type=int, required=True)
-    parser.add_argument('--dupe_factor', type=int, default=10)
+    parser.add_argument('--dupe_factor', type=int, default=1)
 
     args, _ = parser.parse_known_args()
 
     SEQ_LENGTH = args.sequence_length
     # character_tokenizer = BertTokenizerFast.from_pretrained(args.tokenizer_config) # why is from_pretrained needed? 
-    character_tokenizer = BertTokenizerFast("config/vocab.txt", do_lower_case=False) 
+    character_tokenizer = BertTokenizerFast("data/tokenizer/alphabet", do_lower_case=False) 
     dataset_generator = CorrectionDatasetGenerator(character_tokenizer)
     writer = tf.io.TFRecordWriter(args.output_file, options="GZIP")
     logging.basicConfig(level=logging.INFO)
@@ -281,35 +288,35 @@ if __name__ == '__main__':
         example_cache = []
         for inputs, outputs in generate_dataset(character_tokenizer, dataset_generator, args.input_file):
             inst_idx += 1
+            feature = OrderedDict()
+            feature['input_ids'] = int64feature(inputs[0])
+            feature['attention_mask'] = int64feature(inputs[1])
+            feature['token_type_ids'] = int64feature(inputs[2])
+            feature['output1'] = int64feature(outputs[0])
+            feature['output2'] = int64feature(outputs[1])
+            feature['output3'] = int64feature(outputs[2])
+            example = tf.train.Example(features=tf.train.Features(feature=feature))
+            example_cache.append(example)
 
-    #         feature = OrderedDict()
-    #         feature['input_ids'] = int64feature(inputs[0])
-    #         feature['attention_mask'] = int64feature(inputs[1])
-    #         feature['token_type_ids'] = int64feature(inputs[2])
-    #         feature['output1'] = int64feature(outputs[0])
-    #         feature['output2'] = int64feature(outputs[1])
-    #         feature['output3'] = int64feature(outputs[2])
-    #         example = tf.train.Example(features=tf.train.Features(feature=feature))
-    #         example_cache.append(example)
+            if not (inst_idx % 10000):
+                logging.info(f"*** repeat: {repeat} total_instances: {inst_idx} time: {time.time() - start_time}s ***")
 
-    #         if not (inst_idx % 10000):
-    #             logging.info(f"*** repeat: {repeat} total_instances: {inst_idx} time: {time.time() - start_time}s ***")
+            if len(example_cache) >= 100000:
+                write_examples_to_tfrecord(example_cache, writer)
+                example_cache = []
 
-    #         if len(example_cache) >= 100000:
-    #             write_examples_to_tfrecord(example_cache, writer)
-    #             example_cache = []
+            if inst_idx < 20:
+                logging.info("*** Example ***")
+                logging.info("text_with_errors: " + str(printable_format(character_tokenizer, inputs[0])))
+                # logging.info(f"attention_mask: {inputs[1]}")
+                # logging.info(f"token_type_ids: {inputs[2]}")
+                logging.info("text_corrected1: " + str(printable_format(character_tokenizer, outputs[0])))
+                # logging.info("text_corrected2: " + str(printable_format(character_tokenizer, outputs[1])))
+                # logging.info("text_corrected3: " + str(printable_format(character_tokenizer, outputs[2])))
 
-    #         if inst_idx < 20:
-    #             logging.info("*** Example ***")
-    #             logging.info("text_with_errors: " + str(printable_format(character_tokenizer, inputs[0])))
-    #             logging.info(f"attention_mask: {inputs[1]}")
-    #             logging.info(f"token_type_ids: {inputs[2]}")
-    #             logging.info("text_corrected1: " + str(printable_format(character_tokenizer, outputs[0])))
-    #             logging.info("text_corrected1: " + str(printable_format(character_tokenizer, outputs[1])))
-    #             logging.info("text_corrected1: " + str(printable_format(character_tokenizer, outputs[2])))
+        write_examples_to_tfrecord(example_cache, writer)
 
-    #     write_examples_to_tfrecord(example_cache, writer)
+    writer.close()
+    runtime = time.time() - start_time
+    logging.info(f"*** {inst_idx} files wrote to file in {runtime} seconds ***")
 
-    # writer.close()
-    # runtime = time.time() - start_time
-    # logging.info(f"*** {inst_idx} files wrote to file in {runtime} seconds ***")
