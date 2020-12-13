@@ -6,7 +6,8 @@ import time
 import tensorflow as tf
 from transformers import BertTokenizerFast
 
-from correction.correction_dataset_generator import CorrectionDatasetGenerator, generate_dataset, write_examples_to_tfrecord, int64feature
+import correction.correction_dataset_generator
+from correction.correction_dataset_generator import CorrectionDatasetGenerator, generate_dataset, write_examples_to_tfrecord, int64feature, printable_format
 
 def main():
     parser = argparse.ArgumentParser() # creating an ArgumentParser object
@@ -20,7 +21,7 @@ def main():
 
     args, _ = parser.parse_known_args()
 
-    SEQ_LENGTH = args.sequence_length
+    correction.correction_dataset_generator.SEQ_LENGTH = args.sequence_length
     # character_tokenizer = BertTokenizerFast.from_pretrained(args.tokenizer_config) # why is from_pretrained needed? 
     character_tokenizer = BertTokenizerFast("data/tokenizer/alphabet", do_lower_case=False) 
     dataset_generator = CorrectionDatasetGenerator(character_tokenizer)
@@ -53,11 +54,11 @@ def main():
             if inst_idx < 20:
                 logging.info("*** Example ***")
                 logging.info("text_with_errors: " + str(printable_format(character_tokenizer, inputs[0])))
-                logging.info(f"attention_mask: {inputs[1]}")
-                logging.info(f"token_type_ids: {inputs[2]}")
+                # logging.info(f"attention_mask: {inputs[1]}")
+                # logging.info(f"token_type_ids: {inputs[2]}")
                 logging.info("text_corrected1: " + str(printable_format(character_tokenizer, outputs[0])))
-                logging.info("text_corrected2: " + str(printable_format(character_tokenizer, outputs[1])))
-                logging.info("text_corrected3: " + str(printable_format(character_tokenizer, outputs[2])))
+                # logging.info("text_corrected2: " + str(printable_format(character_tokenizer, outputs[1])))
+                # logging.info("text_corrected3: " + str(printable_format(character_tokenizer, outputs[2])))
 
         write_examples_to_tfrecord(example_cache, writer)
 

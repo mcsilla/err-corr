@@ -11,6 +11,8 @@ import tensorflow as tf
 
 from official.nlp.bert.tokenization import _is_punctuation
 
+# TODO(mcsilla): not to use global dynamic variables.
+SEQ_LENGTH=None
 
 def detokenize_char(char_token):
     if char_token.startswith("##"):
@@ -190,7 +192,8 @@ class CorrectionDatasetGenerator:
 
 
 def generate_dataset(tokenizer, correction_dataset_generator, dataset_dir):
-    input_files = tf.io.gfile.glob(dataset_dir + "*/wiki_*")
+    input_files = tf.io.gfile.glob(dataset_dir + "*/*")
+    # input_files = tf.io.gfile.glob(dataset_dir + "*/wiki_*")
     print(input_files)
     random.shuffle(input_files)
     open('output.txt', 'w').close()
