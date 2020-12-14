@@ -32,44 +32,28 @@ def corrected_tokenizer(sequence, tokenizer):
     return ids_object
 
 
-class CorrectionTable:
-    # def __init__(self):
-    #     # TODO(mcsilla): basically just setters, nothing computation heavy, or complicated logic
-    #     self.table = {}
-    #     # don't use defaultdict as the final structure
-
-    # def load_table_from_file(self, file_object):
-    #     table = defaultdict()
-    #     # TODO(mcsilla): sets self.table
-    #     self.table = table
-
-    # # TODO(mcsilla): define interface methods. Here is a stupid example:
-    # def GetOCRCharError(self, original_character):
-    #    pass
-
-    def __init__(self, _tokenizer, _file_object):
+class ErrorTable:
+       
+    def __init__(self, _tokenizer):
         self.vocab_set = set(_tokenizer.get_vocab().keys()).difference(set(['[CLS]', '[SEP]', '[MASK]', '[PAD]', '[UNK]']))
         self.vocab = sorted(self.vocab_set)
         self.tokenizer = _tokenizer
-        self.ocr_err_file = _file_object
-        self.error_table = self.create_error_table_from_file(self.ocr_err_file)
+        self.error_table = None
 
-    def create_correction(self, tokens1, tokens2):
-        correct_tokens = []
-        error_tokens = []
-        for repl_from, repl_to in itertools.zip_longest(tokens1, tokens2):
+    def create_correction(self, tokens_correct, tokens_error):
+        correct_token_triples = []
+        for repl_from, repl_to in itertools.zip_longest(tokens_correct, tokens_error):
             # it was probably wrong
             if repl_to is None:
-                if correct_tokens[-1][1] == self.tokenizer.pad_token:
-                    correct_tokens[-1][1] = repl_from
+                if correct_token_triples[-1][1] == self.tokenizer.pad_token:
+                    correct_token_triples[-1][1] = repl_from
                 else:
-                    correct_tokens[-1][2] = repl_from
+                    correct_token_triples[-1][2] = repl_from
                 continue
             if repl_from is None:
                 repl_from = self.tokenizer.pad_token
-            error_tokens.append(repl_to)
-            correct_tokens.append([repl_from, self.tokenizer.pad_token, self.tokenizer.pad_token])
-        return correct_tokens, error_tokens
+            correct_token_triples.append([repl_from, self.tokenizer.pad_token, self.tokenizer.pad_token])
+        return correct_token_triples
 
     def add_to_error_table(self, chars1, chars2, error_table):
         tokenized_chars1 = tuple(self.tokenizer.tokenize(chars1))
@@ -83,10 +67,9 @@ class CorrectionTable:
             tokenized_chars2_hash = tuple(["##" + tokenized_chars2[0]] + list(tokenized_chars2[1:]))
             error_table[tokenized_chars1_hash].append(tokenized_chars2_hash)
 
-    def create_error_table_from_file(self, file_object):
-        with open(file_object, encoding="utf-8") as errors_file:
-            csv_reader = csv.reader(errors_file, delimiter='\t')
-            error_rows = list(csv_reader)
+    def load_table_from_file(self, file_object):
+        csv_reader = csv.reader(file_object, delimiter='\t')
+        error_rows = list(csv_reader)
 
         error_table = defaultdict(list)
         for possible_mistake in error_rows:
@@ -95,7 +78,8 @@ class CorrectionTable:
                     if chars1 == chars2:
                         continue
                     self.add_to_error_table(chars1, chars2, error_table)
-        return error_table
+        self.error_table = error_table
+
 
 class CorrectionDatasetGenerator:
     error_frequency = 0.15
@@ -103,11 +87,10 @@ class CorrectionDatasetGenerator:
     common_extra_chars = "{}jli;|\\/(:)!1.t'"
     hyphens = "\xad-"
 
-    def __init__(self, _tokenizer, _file_object, _ocr_errors_generator):
+    def __init__(self, _tokenizer, _ocr_errors_generator):
         self.vocab_set = set(_tokenizer.get_vocab().keys()).difference(set(['[CLS]', '[SEP]', '[MASK]', '[PAD]', '[UNK]']))
         self.vocab = sorted(self.vocab_set)
         self.tokenizer = _tokenizer
-        self.ocr_err_file = _file_object
         self.corr_gen = _ocr_errors_generator
 
 
@@ -178,7 +161,7 @@ class CorrectionDatasetGenerator:
                         join_tokens = random.choice(in_table)
                         slice_correct_tokens = tuple(tokens[token_idx:token_idx + join_tokens + 1])
                         slice_error_tokens = random.choice(self.corr_gen.error_table[slice_correct_tokens])
-                        correct_tokens.extend(self.corr_gen.create_correction(slice_correct_tokens, slice_error_tokens)[0])
+                        correct_tokens.extend(self.corr_gen.create_correction(slice_correct_tokens, slice_error_tokens))
                         error_tokens.extend(slice_error_tokens)
                         token_idx += join_tokens + 1
                     else:
