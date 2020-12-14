@@ -31,6 +31,21 @@ def corrected_tokenizer(sequence, tokenizer):
     return ids_object
 
 
+class CorrectionTable:
+    def __init__(self):
+        # TODO(mcsilla): basically just setters, nothing computation heavy, or complicated logic
+        self.table = {}
+        # don't use defaultdict as the final structure
+
+    def load_table_from_file(self, file_object):
+        table = defaultdict()
+        # TODO(mcsilla): sets self.table
+        self.table = table
+
+    # TODO(mcsilla): define interface methods. Here is a stupid example:
+    def GetOCRCharError(self, original_character):
+        pass
+
 class CorrectionDatasetGenerator:
     error_frequency = 0.15
     sparse_frequency = 0.2
@@ -63,6 +78,7 @@ class CorrectionDatasetGenerator:
     def add_to_error_table(self, chars1, chars2, error_table, correction_table):
         tokenized_chars1 = tuple(self.tokenizer.tokenize(chars1))
         tokenized_chars2 = tuple(self.tokenizer.tokenize(chars2))
+        # if there is a general OCR_errors file, then it is possible to have [UNK] here
         if "[UNK]" in tokenized_chars2 or "[UNK]" in tokenized_chars1:
             return
         error_table[tokenized_chars1].append(tokenized_chars2)
@@ -88,8 +104,11 @@ class CorrectionDatasetGenerator:
                     if chars1 == chars2:
                         continue
                     self.add_to_error_table(chars1, chars2, error_table, correction_table)
-
-        # print(correction_table)
+        with open(table.txt, "w") as table:
+            standard_out = sys.stdout
+            sys.stdout = table
+            print("Error table: \n\n", error_table, "\n Correction table: \n\n", correction_table)
+            sys.stdout = standard_out
         return error_table, correction_table
 
     def run(self, tokens, doc):
