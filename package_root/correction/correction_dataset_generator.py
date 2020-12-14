@@ -13,7 +13,6 @@ from official.nlp.bert.tokenization import _is_punctuation
 
 # TODO(mcsilla): not to use global dynamic variables.
 SEQ_LENGTH=None
-BASE_DIR = Path(__file__).parent
 
 def detokenize_char(char_token):
     if char_token.startswith("##"):
@@ -93,9 +92,14 @@ class CorrectionDatasetGenerator:
         self.tokenizer = _tokenizer
         self.corr_gen = _ocr_errors_generator
 
+    
+    def replace_with_random_char(self, tokens, error_tokens, correct_tokens, token_idx):
+        error_tokens.append(random.choice(self.vocab)) # can it be special token?
+        correct_tokens.append([tokens[token_idx], self.tokenizer.pad_token, self.tokenizer.pad_token])
+        token_idx += 1    
+
 
     def run(self, tokens, doc):
-        error_text = []
         error_tokens = []
         correct_tokens = []
         token_idx = 0
@@ -104,9 +108,10 @@ class CorrectionDatasetGenerator:
             if random.random() < self.error_frequency: # random.random() in [0, 1)
                 # Random
                 if random.random() < 0.1:
-                    error_tokens.append(random.choice(self.vocab)) # can it be special token?
-                    correct_tokens.append([tokens[token_idx], self.tokenizer.pad_token, self.tokenizer.pad_token])
-                    token_idx += 1
+                    # error_tokens.append(random.choice(self.vocab)) # can it be special token?
+                    # correct_tokens.append([tokens[token_idx], self.tokenizer.pad_token, self.tokenizer.pad_token])
+                    self.replace_with_random_char(tokens, error_tokens, correct_tokens, token_idx)
+                    token_idx += 1    
                 # Deletion
                 elif random.random() < 0.05 and correct_tokens and correct_tokens[-1][2] == self.tokenizer.pad_token:
                     for corr_token_idx in range(len(correct_tokens[-1])): # range(3)
@@ -187,12 +192,13 @@ class CorrectionDatasetGenerator:
                     for token_idx in range(sparse_start, min(sparse_start + sparse_length, len(error_tokens))):
                         if error_tokens[token_idx].startswith("##"):
                             error_tokens[token_idx] = error_tokens[token_idx][2:]
-        with open("/home/mcsilla/machine_learning/gitrepos/err-corr/test_output.txt", "w") as f:
-            standard_out = sys.stdout
-            sys.stdout = f
-            print("Error tokens: \n\n", error_tokens, "\n\n Correction tokens: \n\n", correct_tokens)
-            # print("alma")
-            sys.stdout = standard_out
+
+        # with open("/home/mcsilla/machine_learning/gitrepos/err-corr/test_output.txt", "w") as f:
+        #     standard_out = sys.stdout
+        #     sys.stdout = f
+        #     print("Error tokens: \n\n", error_tokens, "\n\n Correction tokens: \n\n", correct_tokens)
+        #     # print("alma")
+        #     sys.stdout = standard_out
 
         return error_tokens, correct_tokens
 
@@ -201,7 +207,7 @@ def generate_dataset(tokenizer, correction_dataset_generator, dataset_dir):
     input_files = tf.io.gfile.glob(dataset_dir + "*/*")
     print(input_files)
     random.shuffle(input_files)
-    # open('output.txt', 'w').close()
+    open("/home/mcsilla/machine_learning/gitrepos/err-corr/test_output.txt", 'w').close()
     for input_file in input_files:
         with tf.io.gfile.GFile(input_file, mode='r') as inf:
             document = ""
@@ -233,6 +239,12 @@ def generate_dataset(tokenizer, correction_dataset_generator, dataset_dir):
                                                          [(0, SEQ_LENGTH - instance_input_len), (0, 0)],
                                                          constant_values=-100)
                             corrected_input_ids = np.swapaxes(corrected_input_ids, 0, 1)
+                            with open("/home/mcsilla/machine_learning/gitrepos/err-corr/test_output.txt", "a") as f:
+                                standard_out = sys.stdout
+                                sys.stdout = f
+                                print((instance_input_ids, instance_attention_mask, instance_token_type_ids), \
+                                  (corrected_input_ids[0], corrected_input_ids[1], corrected_input_ids[2]))
+                                sys.stdout = standard_out
                             yield (instance_input_ids, instance_attention_mask, instance_token_type_ids), \
                                   (corrected_input_ids[0], corrected_input_ids[1], corrected_input_ids[2])
 
