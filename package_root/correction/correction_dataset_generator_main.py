@@ -8,7 +8,7 @@ import tensorflow as tf
 from transformers import BertTokenizerFast
 
 import correction.correction_dataset_generator
-from correction.correction_dataset_generator import ErrorTable, CorrectionDatasetGenerator, generate_dataset, write_examples_to_tfrecord, int64feature, printable_format
+from correction.correction_dataset_generator import ErrorTable, CorrectionDatasetGenerator, write_examples_to_tfrecord, int64feature, printable_format
 
 def main():
     parser = argparse.ArgumentParser() # creating an ArgumentParser object
@@ -38,7 +38,7 @@ def main():
     for repeat in range(record_params["dupe_factor"]):
         example_cache = []
         # for inputs, outputs in generate_dataset(character_tokenizer, dataset_generator, files_paths["dataset_dir"]):
-        for inputs, outputs in generate_dataset(character_tokenizer, dataset_generator, files_paths["test_input_dir"]):
+        for inputs, outputs in dataset_generator.generate_dataset(files_paths["test_input_dir"]):
             pass
     #         inst_idx += 1
     #         feature = OrderedDict()

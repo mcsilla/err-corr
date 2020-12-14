@@ -247,53 +247,53 @@ class CorrectionDatasetGenerator:
         return error_tokens, correct_tokens
 
 
-def generate_dataset(tokenizer, correction_dataset_generator, dataset_dir):
-    input_files = tf.io.gfile.glob(dataset_dir + "*/*")
-    print(input_files)
-    random.shuffle(input_files)
-    open("/home/mcsilla/machine_learning/gitrepos/err-corr/test_output.txt", 'w').close()
-    for input_file in input_files:
-        with tf.io.gfile.GFile(input_file, mode='r') as inf:
-            document = ""
-            for line in inf:
-                if not line.strip(): # if there are only white spaces in line 
-                    document_upper = document.upper()
-                    for doc in (document, document_upper):
-                        tokens = tokenizer.tokenize(doc) # tokenize the textblocks between empty lines
-                        document = ""
-                        if not tokens:
-                            continue
-                        all_modified_tokens, all_corrected_tokens = correction_dataset_generator.run(tokens, doc)
-                        input_len = len(all_modified_tokens)
-                        for start_index in range(0, input_len, SEQ_LENGTH - 2):
-                            modified_tokens = all_modified_tokens[start_index:start_index + SEQ_LENGTH - 2]
-                            corrected_tokens = all_corrected_tokens[start_index:start_index + SEQ_LENGTH - 2]
-                            modified_chars = [detokenize_char(token) for token in modified_tokens]
-                            # dictionary with keys: 'input_ids', 'attention_mask', 'token_type_ids'
-                            inputs = corrected_tokenizer("".join(modified_chars), tokenizer)
-                            instance_input_ids = inputs["input_ids"]
-                            instance_attention_mask = inputs["attention_mask"]
-                            instance_token_type_ids = inputs["token_type_ids"]
-                            corrected_input_ids = list(map(tokenizer.convert_tokens_to_ids, corrected_tokens))
-                            corrected_input_ids = np.pad(corrected_input_ids,
-                                                         [(1, 1), (0, 0)],
-                                                         constant_values=tokenizer.pad_token_id)
-                            instance_input_len = len(modified_tokens) + 2
-                            corrected_input_ids = np.pad(corrected_input_ids,
-                                                         [(0, SEQ_LENGTH - instance_input_len), (0, 0)],
-                                                         constant_values=-100)
-                            corrected_input_ids = np.swapaxes(corrected_input_ids, 0, 1)
-                            with open("/home/mcsilla/machine_learning/gitrepos/err-corr/test_output.txt", "a") as f:
-                                standard_out = sys.stdout
-                                sys.stdout = f
-                                print((instance_input_ids, instance_attention_mask, instance_token_type_ids), \
-                                  (corrected_input_ids[0], corrected_input_ids[1], corrected_input_ids[2]))
-                                sys.stdout = standard_out
-                            yield (instance_input_ids, instance_attention_mask, instance_token_type_ids), \
-                                  (corrected_input_ids[0], corrected_input_ids[1], corrected_input_ids[2])
+    def generate_dataset(self, dataset_dir):
+        input_files = tf.io.gfile.glob(dataset_dir + "*/*")
+        # print(input_files)
+        random.shuffle(input_files)
+        open("/home/mcsilla/machine_learning/gitrepos/err-corr/test_output.txt", 'w').close()
+        for input_file in input_files:
+            with tf.io.gfile.GFile(input_file, mode='r') as inf:
+                document = ""
+                for line in inf:
+                    if not line.strip(): # if there are only white spaces in line 
+                        document_upper = document.upper()
+                        for doc in (document, document_upper):
+                            tokens = self.tokenizer.tokenize(doc) # tokenize the textblocks between empty lines
+                            document = ""
+                            if not tokens:
+                                continue
+                            all_modified_tokens, all_corrected_tokens = self.run(tokens, doc)
+                            input_len = len(all_modified_tokens)
+                            for start_index in range(0, input_len, SEQ_LENGTH - 2):
+                                modified_tokens = all_modified_tokens[start_index:start_index + SEQ_LENGTH - 2]
+                                corrected_tokens = all_corrected_tokens[start_index:start_index + SEQ_LENGTH - 2]
+                                modified_chars = [detokenize_char(token) for token in modified_tokens]
+                                # dictionary with keys: 'input_ids', 'attention_mask', 'token_type_ids'
+                                inputs = corrected_tokenizer("".join(modified_chars), self.tokenizer)
+                                instance_input_ids = inputs["input_ids"]
+                                instance_attention_mask = inputs["attention_mask"]
+                                instance_token_type_ids = inputs["token_type_ids"]
+                                corrected_input_ids = list(map(self.tokenizer.convert_tokens_to_ids, corrected_tokens))
+                                corrected_input_ids = np.pad(corrected_input_ids,
+                                                            [(1, 1), (0, 0)],
+                                                            constant_values=self.tokenizer.pad_token_id)
+                                instance_input_len = len(modified_tokens) + 2
+                                corrected_input_ids = np.pad(corrected_input_ids,
+                                                            [(0, SEQ_LENGTH - instance_input_len), (0, 0)],
+                                                            constant_values=-100)
+                                corrected_input_ids = np.swapaxes(corrected_input_ids, 0, 1)
+                                with open("/home/mcsilla/machine_learning/gitrepos/err-corr/test_output.txt", "a") as f:
+                                    standard_out = sys.stdout
+                                    sys.stdout = f
+                                    print((instance_input_ids, instance_attention_mask, instance_token_type_ids), \
+                                    (corrected_input_ids[0], corrected_input_ids[1], corrected_input_ids[2]))
+                                    sys.stdout = standard_out
+                                yield (instance_input_ids, instance_attention_mask, instance_token_type_ids), \
+                                    (corrected_input_ids[0], corrected_input_ids[1], corrected_input_ids[2])
 
-                else:
-                    document += line
+                    else:
+                        document += line
 
 
 def int64feature(int_list):
