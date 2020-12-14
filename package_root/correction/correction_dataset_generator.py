@@ -3,7 +3,7 @@ import itertools
 from collections import defaultdict
 import random
 import csv
-
+from pathlib import Path
 import sys
 
 import numpy as np
@@ -13,6 +13,7 @@ from official.nlp.bert.tokenization import _is_punctuation
 
 # TODO(mcsilla): not to use global dynamic variables.
 SEQ_LENGTH=None
+BASE_DIR = Path(__file__).parent
 
 def detokenize_char(char_token):
     if char_token.startswith("##"):
@@ -32,31 +33,26 @@ def corrected_tokenizer(sequence, tokenizer):
 
 
 class CorrectionTable:
-    def __init__(self):
-        # TODO(mcsilla): basically just setters, nothing computation heavy, or complicated logic
-        self.table = {}
-        # don't use defaultdict as the final structure
+    # def __init__(self):
+    #     # TODO(mcsilla): basically just setters, nothing computation heavy, or complicated logic
+    #     self.table = {}
+    #     # don't use defaultdict as the final structure
 
-    def load_table_from_file(self, file_object):
-        table = defaultdict()
-        # TODO(mcsilla): sets self.table
-        self.table = table
+    # def load_table_from_file(self, file_object):
+    #     table = defaultdict()
+    #     # TODO(mcsilla): sets self.table
+    #     self.table = table
 
-    # TODO(mcsilla): define interface methods. Here is a stupid example:
-    def GetOCRCharError(self, original_character):
-        pass
+    # # TODO(mcsilla): define interface methods. Here is a stupid example:
+    # def GetOCRCharError(self, original_character):
+    #    pass
 
-class CorrectionDatasetGenerator:
-    error_frequency = 0.15
-    sparse_frequency = 0.2
-    common_extra_chars = "{}jli;|\\/(:)!1.t'"
-    hyphens = "\xad-"
-
-    def __init__(self, _tokenizer):
+    def __init__(self, _tokenizer, _file_object):
         self.vocab_set = set(_tokenizer.get_vocab().keys()).difference(set(['[CLS]', '[SEP]', '[MASK]', '[PAD]', '[UNK]']))
         self.vocab = sorted(self.vocab_set)
         self.tokenizer = _tokenizer
-        self.error_table, self.correction_table = self.create_error_table_from_file("ocr_errors.txt")
+        self.ocr_err_file = _file_object
+        self.error_table, self.correction_table = self.create_error_table_from_file(self.ocr_err_file)
 
     def create_correction(self, tokens1, tokens2):
         correct_tokens = []
@@ -91,8 +87,8 @@ class CorrectionDatasetGenerator:
             correction_table[tokenized_chars1_hash, tokenized_chars2_hash] = self.create_correction(
                 tokenized_chars1_hash, tokenized_chars2_hash)
 
-    def create_error_table_from_file(self, file_path):
-        with open(file_path, encoding="utf-8") as errors_file:
+    def create_error_table_from_file(self, file_object):
+        with open(file_object, encoding="utf-8") as errors_file:
             csv_reader = csv.reader(errors_file, delimiter='\t')
             error_rows = list(csv_reader)
 
@@ -104,19 +100,86 @@ class CorrectionDatasetGenerator:
                     if chars1 == chars2:
                         continue
                     self.add_to_error_table(chars1, chars2, error_table, correction_table)
-        with open(table.txt, "w") as table:
+        with open("/home/mcsilla/machine_learning/gitrepos/err-corr/test_output.txt", "w") as f:
             standard_out = sys.stdout
-            sys.stdout = table
-            print("Error table: \n\n", error_table, "\n Correction table: \n\n", correction_table)
+            sys.stdout = f
+            print("Error table: \n\n", sorted(error_table.items()), "\n\n Correction table: \n\n", sorted(correction_table.items()))
             sys.stdout = standard_out
         return error_table, correction_table
+
+class CorrectionDatasetGenerator:
+    error_frequency = 0.15
+    sparse_frequency = 0.2
+    common_extra_chars = "{}jli;|\\/(:)!1.t'"
+    hyphens = "\xad-"
+
+    def __init__(self, _tokenizer, _file_object, _ocr_errors_generator):
+        self.vocab_set = set(_tokenizer.get_vocab().keys()).difference(set(['[CLS]', '[SEP]', '[MASK]', '[PAD]', '[UNK]']))
+        self.vocab = sorted(self.vocab_set)
+        self.tokenizer = _tokenizer
+        self.ocr_err_file = _file_object
+        self.corr_gen = _ocr_errors_generator
+        # self.error_table, self.correction_table = self.create_error_table_from_file(self.ocr_err_file)
+
+    # def create_correction(self, tokens1, tokens2):
+    #     correct_tokens = []
+    #     error_tokens = []
+    #     for repl_from, repl_to in itertools.zip_longest(tokens1, tokens2):
+    #         # it was probably wrong
+    #         if repl_to is None:
+    #             if correct_tokens[-1][1] == self.tokenizer.pad_token:
+    #                 correct_tokens[-1][1] = repl_from
+    #             else:
+    #                 correct_tokens[-1][2] = repl_from
+    #             continue
+    #         if repl_from is None:
+    #             repl_from = self.tokenizer.pad_token
+    #         error_tokens.append(repl_to)
+    #         correct_tokens.append([repl_from, self.tokenizer.pad_token, self.tokenizer.pad_token])
+    #     return correct_tokens, error_tokens
+
+    # def add_to_error_table(self, chars1, chars2, error_table, correction_table):
+    #     tokenized_chars1 = tuple(self.tokenizer.tokenize(chars1))
+    #     tokenized_chars2 = tuple(self.tokenizer.tokenize(chars2))
+    #     # if there is a general OCR_errors file, then it is possible to have [UNK] here
+    #     if "[UNK]" in tokenized_chars2 or "[UNK]" in tokenized_chars1:
+    #         return
+    #     error_table[tokenized_chars1].append(tokenized_chars2)
+    #     correction_table[tokenized_chars1, tokenized_chars2] = self.create_correction(tokenized_chars1,
+    #                                                                             tokenized_chars2)
+    #     if "##" + tokenized_chars1[0] in self.vocab_set and "##" + tokenized_chars2[0] in self.vocab_set:
+    #         tokenized_chars1_hash = tuple(["##" + tokenized_chars1[0]] + list(tokenized_chars1[1:]))
+    #         tokenized_chars2_hash = tuple(["##" + tokenized_chars2[0]] + list(tokenized_chars2[1:]))
+    #         error_table[tokenized_chars1_hash].append(tokenized_chars2_hash)
+    #         correction_table[tokenized_chars1_hash, tokenized_chars2_hash] = self.create_correction(
+    #             tokenized_chars1_hash, tokenized_chars2_hash)
+
+    # def create_error_table_from_file(self, file_object):
+    #     with open(file_object, encoding="utf-8") as errors_file:
+    #         csv_reader = csv.reader(errors_file, delimiter='\t')
+    #         error_rows = list(csv_reader)
+
+    #     error_table = defaultdict(list)
+    #     correction_table = {}
+    #     for possible_mistake in error_rows:
+    #         for chars1 in possible_mistake:
+    #             for chars2 in possible_mistake:
+    #                 if chars1 == chars2:
+    #                     continue
+    #                 self.add_to_error_table(chars1, chars2, error_table, correction_table)
+    #     with open("/home/mcsilla/machine_learning/gitrepos/err-corr/test_output.txt", "w") as f:
+    #         standard_out = sys.stdout
+    #         sys.stdout = f
+    #         print("Error table: \n\n", sorted(error_table.items()), "\n\n Correction table: \n\n", sorted(correction_table.items()))
+    #         sys.stdout = standard_out
+    #     return error_table, correction_table
 
     def run(self, tokens, doc):
         error_text = []
         error_tokens = []
         correct_tokens = []
         token_idx = 0
-        random.seed(42)
+        # random.seed(42)
         while token_idx < len(tokens):
             if random.random() < self.error_frequency: # random.random() in [0, 1)
                 # Random
@@ -172,15 +235,17 @@ class CorrectionDatasetGenerator:
                 else:
                     in_table = []
                     for i in range(3):
-                        if tuple(tokens[token_idx:token_idx + i + 1]) in self.error_table:
+                        if tuple(tokens[token_idx:token_idx + i + 1]) in self.corr_gen.error_table:
                             in_table.append(i)
                     if in_table:
                         join_tokens = random.choice(in_table)
                         slice_correct_tokens = tuple(tokens[token_idx:token_idx + join_tokens + 1])
-                        slice_error_tokens = random.choice(self.error_table[slice_correct_tokens])
-                        correct_tokens.extend(deepcopy(self.correction_table[slice_correct_tokens,
+                        slice_error_tokens = random.choice(self.corr_gen.error_table[slice_correct_tokens])
+                        if len(slice_correct_tokens) > 1:
+                            print(slice_correct_tokens, slice_error_tokens, self.corr_gen.correction_table[slice_correct_tokens, slice_error_tokens][0], self.corr_gen.correction_table[slice_correct_tokens, slice_error_tokens][1])
+                        correct_tokens.extend(deepcopy(self.corr_gen.correction_table[slice_correct_tokens,
                                                                              slice_error_tokens][0]))
-                        error_tokens.extend(deepcopy(self.correction_table[slice_correct_tokens,
+                        error_tokens.extend(deepcopy(self.corr_gen.correction_table[slice_correct_tokens,
                                                                            slice_error_tokens][1]))
                         token_idx += join_tokens + 1
                     else:
@@ -212,10 +277,9 @@ class CorrectionDatasetGenerator:
 
 def generate_dataset(tokenizer, correction_dataset_generator, dataset_dir):
     input_files = tf.io.gfile.glob(dataset_dir + "*/*")
-    # input_files = tf.io.gfile.glob(dataset_dir + "*/wiki_*")
     print(input_files)
     random.shuffle(input_files)
-    open('output.txt', 'w').close()
+    # open('output.txt', 'w').close()
     for input_file in input_files:
         with tf.io.gfile.GFile(input_file, mode='r') as inf:
             document = ""
