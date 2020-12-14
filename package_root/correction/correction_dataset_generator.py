@@ -12,7 +12,7 @@ import tensorflow as tf
 from official.nlp.bert.tokenization import _is_punctuation
 
 # TODO(mcsilla): not to use global dynamic variables.
-SEQ_LENGTH=None
+# SEQ_LENGTH=None
 
 def detokenize_char(char_token):
     if char_token.startswith("##"):
@@ -24,8 +24,8 @@ def detokenize_char(char_token):
     return (" " + char_token)
 
 
-def corrected_tokenizer(sequence, tokenizer):
-    ids_object = tokenizer(text="a" + sequence, padding='max_length', max_length=SEQ_LENGTH + 1)
+def corrected_tokenizer(sequence, tokenizer, seq_length):
+    ids_object = tokenizer(text="a" + sequence, padding='max_length', max_length=seq_length + 1)
     for key in ids_object:
         ids_object[key] = ids_object[key][:1] + ids_object[key][2:]
     return ids_object
@@ -88,10 +88,11 @@ class CorrectionDatasetGenerator:
     common_extra_chars = "{}jli;|\\/(:)!1.t'"
     hyphens = "\xad-"
 
-    def __init__(self, _tokenizer, _ocr_errors_generator):
+    def __init__(self, _tokenizer, _ocr_errors_generator, _seq_length):
         self.vocab_set = set(_tokenizer.get_vocab().keys()).difference(set(['[CLS]', '[SEP]', '[MASK]', '[PAD]', '[UNK]']))
         self.vocab = sorted(self.vocab_set)
         self.tokenizer = _tokenizer
+        self.seq_length = _seq_length
         self.corr_gen = _ocr_errors_generator
 
     
@@ -150,22 +151,22 @@ class CorrectionDatasetGenerator:
             return token_idx + 1
 
     def make_sparse(self, error_tokens):
-        for sequence_start in range(0, len(error_tokens), SEQ_LENGTH - 2):
+        for sequence_start in range(0, len(error_tokens), self.seq_length - 2):
             if random.random() < self.sparse_frequency:
                 for sparse_idx in range(0, 10):
                     sparse_start = random.randint(sequence_start,
-                                                  min(sequence_start + SEQ_LENGTH - 2, len(error_tokens)))
+                                                  min(sequence_start + self.seq_length - 2, len(error_tokens)))
                     sparse_length = random.randint(1, 20)
                     for token_idx in range(sparse_start, min(sparse_start + sparse_length, len(error_tokens))):
                         if error_tokens[token_idx].startswith("##"):
                             error_tokens[token_idx] = error_tokens[token_idx][2:]
 
     def make_dense(self, error_tokens):
-        for sequence_start in range(0, len(error_tokens), SEQ_LENGTH - 2):
+        for sequence_start in range(0, len(error_tokens), self.seq_length - 2):
             if random.random() < self.dense_frequency:
                 for dense_idx in range(0, 10):
                     dense_start = random.randint(sequence_start,
-                                                  min(sequence_start + SEQ_LENGTH - 2, len(error_tokens)))
+                                                  min(sequence_start + self.seq_length - 2, len(error_tokens)))
                     dense_length = random.randint(1, 20)
                     for token_idx in range(dense_start, min(dense_start + dense_length, len(error_tokens))):
                         if len(error_tokens[token_idx]) == 1 and "##" + error_tokens[token_idx] in self.vocab_set:
@@ -265,12 +266,12 @@ class CorrectionDatasetGenerator:
                                 continue
                             all_modified_tokens, all_corrected_tokens = self.run(tokens, doc)
                             input_len = len(all_modified_tokens)
-                            for start_index in range(0, input_len, SEQ_LENGTH - 2):
-                                modified_tokens = all_modified_tokens[start_index:start_index + SEQ_LENGTH - 2]
-                                corrected_tokens = all_corrected_tokens[start_index:start_index + SEQ_LENGTH - 2]
+                            for start_index in range(0, input_len, self.seq_length - 2):
+                                modified_tokens = all_modified_tokens[start_index:start_index + self.seq_length - 2]
+                                corrected_tokens = all_corrected_tokens[start_index:start_index + self.seq_length - 2]
                                 modified_chars = [detokenize_char(token) for token in modified_tokens]
                                 # dictionary with keys: 'input_ids', 'attention_mask', 'token_type_ids'
-                                inputs = corrected_tokenizer("".join(modified_chars), self.tokenizer)
+                                inputs = corrected_tokenizer("".join(modified_chars), self.tokenizer, self.seq_length)
                                 instance_input_ids = inputs["input_ids"]
                                 instance_attention_mask = inputs["attention_mask"]
                                 instance_token_type_ids = inputs["token_type_ids"]
@@ -280,7 +281,7 @@ class CorrectionDatasetGenerator:
                                                             constant_values=self.tokenizer.pad_token_id)
                                 instance_input_len = len(modified_tokens) + 2
                                 corrected_input_ids = np.pad(corrected_input_ids,
-                                                            [(0, SEQ_LENGTH - instance_input_len), (0, 0)],
+                                                            [(0, self.seq_length - instance_input_len), (0, 0)],
                                                             constant_values=-100)
                                 corrected_input_ids = np.swapaxes(corrected_input_ids, 0, 1)
                                 with open("/home/mcsilla/machine_learning/gitrepos/err-corr/test_output.txt", "a") as f:

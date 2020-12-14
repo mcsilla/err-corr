@@ -23,13 +23,13 @@ def main():
         files_paths = config["paths"]
         record_params = config["records"]
 
-    correction.correction_dataset_generator.SEQ_LENGTH = record_params["sequence_length"]
+    # correction.correction_dataset_generator.SEQ_LENGTH = record_params["sequence_length"]
     # character_tokenizer = BertTokenizerFast.from_pretrained(args.tokenizer_config) # why is from_pretrained needed? 
     character_tokenizer = BertTokenizerFast(files_paths["vocab_file"], do_lower_case=False) 
     ocr_errors_generator = ErrorTable(character_tokenizer)
     with open(files_paths["ocr_errors_general"], encoding="utf-8") as f:
         ocr_errors_generator.load_table_from_file(f)
-    dataset_generator = CorrectionDatasetGenerator(character_tokenizer, ocr_errors_generator)
+    dataset_generator = CorrectionDatasetGenerator(character_tokenizer, ocr_errors_generator, record_params["sequence_length"])
     writer = tf.io.TFRecordWriter(files_paths["output_file"], options="GZIP")
     logging.basicConfig(level=logging.INFO)
     inst_idx = 0
