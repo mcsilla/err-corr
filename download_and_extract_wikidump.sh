@@ -15,9 +15,9 @@ echo "Extracting the latest $LG-language Wikipedia dump to data/wikiextracted/$L
 python3 -m wikiextractor.WikiExtractor --processes 4 -o data/wikiextracted/$LG/raw data/wikidump/$WIKI_DUMP_NAME
 echo "Succesfully extracted the latest $LG-language Wikipedia dump to data/wikiextracted/$LG/raw"
 
-# clean downloaded dump file
-echo "Clean the extracted $LG-language Wikipedia files..."
-python3 clean_extracted_wiki_dump.py --language $LG
-echo "Succesfully cleaned the extracted $LG-language Wikipedia files and save to data/wikiextracted/$LG/cleaned"
+# # clean downloaded dump file
+# echo "Clean the extracted $LG-language Wikipedia files..."
+# python3 clean_extracted_wiki_dump.py --language $LG
+# echo "Succesfully cleaned the extracted $LG-language Wikipedia files and save to data/wikiextracted/$LG/cleaned"
 
 
