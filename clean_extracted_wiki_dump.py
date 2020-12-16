@@ -9,11 +9,17 @@ import argparse
 OPEN_DOC_TAG_AND_TITLE = re.compile("^<doc.*>\n.*\n", re.MULTILINE)
 EMPTY_LINES = re.compile("^\s*\n", re.MULTILINE)
 CLOSE_DOC_TAG = re.compile("</doc>", re.MULTILINE)
-END_OF_SENTENCE = re.compile("(?<=[\w\"”)\.][\w\"” )][.?!]) +(?=[A-Z\"])")
+END_OF_SENTENCE = re.compile("(?<=[\w\"”)\.][\w\"” )][.?!]) +(?=[A-Z])")
+EOS2 = re.compile("(?<=[\w\"”)\.][\w\"” )][.?!]) +(?=[\"][A-Z])")
 BAD_NEW_LINE = re.compile("(?<=[^.?!])\n", re.MULTILINE)
 BR_TAG = re.compile("<br>", re.MULTILINE)
 LINK_WITH_PIPE = re.compile(r"\[\[([^\]\[]*)\|([^\|\]\[]+)\]\]")
 LINK_WITHOUT_PIPE = re.compile(r"\[\[([^\|\]\[]+)\]\]")
+SQUARE_BRACKET_JPG = re.compile(r"\[\[[^\]\[]+jpg[^\]\[]+\]\]", re.IGNORECASE)
+SQUARE_BRACKET_PNG = re.compile(r"\[\[[^\]\[]+png[^\]\[]+\]\]", re.IGNORECASE)
+SQUARE_BRACKET_SVG = re.compile(r"\[\[[^\]\[]+svg[^\]\[]+\]\]", re.IGNORECASE)
+SQUARE_BRACKET_JPEG = re.compile(r"\[\[[^\]\[]+jpeg[^\]\[]+\]\]", re.IGNORECASE)
+TAG = re.compile(r"<[^<>]+>")
 
 
 def read_files(language):
@@ -34,8 +40,14 @@ def clean_lines(content):
         lambda content: CLOSE_DOC_TAG.sub("\n", content),
         lambda content: BR_TAG.sub("\n", content),
         lambda content: END_OF_SENTENCE.sub("\n", content),
+        lambda content: EOS2.sub("\n", content),
         lambda content: LINK_WITH_PIPE.sub(r"\2", content),   
-        lambda content: LINK_WITHOUT_PIPE.sub(r"\1", content)    
+        lambda content: LINK_WITHOUT_PIPE.sub(r"\1", content),    
+        lambda content: SQUARE_BRACKET_JPG.sub("", content),    
+        lambda content: SQUARE_BRACKET_PNG.sub("", content),    
+        lambda content: SQUARE_BRACKET_SVG.sub("", content),    
+        lambda content: SQUARE_BRACKET_JPEG.sub("", content),
+        lambda content: TAG.sub("", content),
     )
     for rule in rules:
         content = rule(content)

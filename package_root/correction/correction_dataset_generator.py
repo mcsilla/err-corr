@@ -42,7 +42,6 @@ class ErrorTable:
     def create_correction(self, tokens_correct, tokens_error):
         correct_token_triples = []
         for repl_from, repl_to in itertools.zip_longest(tokens_correct, tokens_error):
-            # it was probably wrong
             if repl_to is None and len(correct_token_triples) < 3:
                 correct_token_triples[-1].append(repl_from)
                 continue
@@ -78,7 +77,11 @@ class ErrorTable:
 
     
     def get_error(self, tokens_list):
-        return random.choice(self.error_table[tuple(tokens_list)])
+        error_table_dict = dict(self.error_table)
+        key = tuple(tokens_list)
+        if key in error_table_dict:
+            return random.choice(error_table_dict[key])
+        return None
 
 
 class CorrectionDatasetGenerator:
@@ -136,7 +139,7 @@ class CorrectionDatasetGenerator:
     def make_ocr_typo(self, tokens, error_tokens, correct_tokens, token_idx):
         in_table = []
         for i in range(3):
-            if tuple(tokens[token_idx:token_idx + i + 1]) in self.corr_gen.error_table:
+            if self.corr_gen.get_error(tokens[token_idx:token_idx + i + 1]):
                 in_table.append(i)
         if in_table:
             join_tokens = random.choice(in_table)
@@ -180,9 +183,7 @@ class CorrectionDatasetGenerator:
 
     def pad_to_length_3(self, correct_tokens):
         for correct_token in correct_tokens:
-            for token, index in itertools.zip_longest(correct_token, range(3)):
-                if token == None:
-                    correct_token.append(self.tokenizer.pad_token)
+            correct_token += [self.tokenizer.pad_token] * (3 - len(correct_token))
 
     def run(self, tokens, doc):
         error_tokens = []
@@ -191,17 +192,12 @@ class CorrectionDatasetGenerator:
         random.seed(42)
         while token_idx < len(tokens):
             if random.random() < self.error_frequency: # random.random() in [0, 1)
-                # Random
                 if random.random() < 0.1:
-                    # error_tokens.append(random.choice(self.vocab)) # can it be special token?
-                    # correct_tokens.append([tokens[token_idx], self.tokenizer.pad_token, self.tokenizer.pad_token])
                     self.replace_with_random_token(tokens, error_tokens, correct_tokens, token_idx)
                     token_idx += 1    
-                # Deletion
                 elif random.random() < 0.05 and correct_tokens and len(correct_tokens[-1]) < 3:
                     self.delete_token(tokens, correct_tokens, token_idx)
                     token_idx += 1
-                # Extra char
                 elif random.random() < 0.05:
                     token_idx = self.add_extra_token(tokens, error_tokens, correct_tokens, token_idx)
                 # Swap
@@ -215,12 +211,10 @@ class CorrectionDatasetGenerator:
                 elif random.random() < 0.1 and "##" + tokens[token_idx] in self.vocab_set:
                     self.add_space(tokens, error_tokens, correct_tokens, token_idx)
                     token_idx += 1
-                # Remove space
                 elif random.random() < 0.1 and tokens[token_idx].startswith("##") and \
                         tokens[token_idx][2:] in self.vocab_set:
                     self.remove_space(tokens, error_tokens, correct_tokens, token_idx)
                     token_idx += 1
-                # OCR typos
                 else:
                     token_idx = self.make_ocr_typo(tokens, error_tokens, correct_tokens, token_idx)
             else:
