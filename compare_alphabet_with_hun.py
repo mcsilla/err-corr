@@ -6,7 +6,7 @@ import sys
 
 BASE_DIR = Path(__file__).parent
 ALPHABET_ROOT = BASE_DIR / "data/tokenizer"
-ALPHABET_HUN =  BASE_DIR / "data/tokenizer/hu/alphabet"
+ALPHABET_HUN =  BASE_DIR / "alphabet_hu"
 
 def get_alphabet(path):
     with open(path) as f:
