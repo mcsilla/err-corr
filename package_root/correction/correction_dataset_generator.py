@@ -240,6 +240,36 @@ class CorrectionDatasetGenerator:
         #     sys.stdout = standard_out
 
         return error_tokens, correct_tokens
+    
+    def create_input(self, tokens):
+        modified_tokens = [self.tokenizer.cls_token] + tokens + [self.tokenizer.sep_token]
+        input_ids = self.tokenizer.convert_tokens_to_ids(modified_tokens)
+        input_len = len(modified_tokens)
+        instance_input_ids = np.pad(input_ids, (0, self.seq_length - input_len), constant_values=self.tokenizer.pad_token_id)
+        instance_attention_mask = np.concatenate((
+            np.ones(input_len, dtype=np.int32),
+            np.zeros(self.seq_length - input_len, dtype=np.int32)
+        ))
+        instance_token_type_ids = np.zeros(self.seq_length, dtype=np.int32)
+        return {
+            "input_ids": instance_input_ids,
+            "attention_mask": instance_attention_mask,
+            "token_type_ids": instance_token_type_ids
+        }
+
+    def create_label(self, corrected_tokens):
+        padded_tokens = np.pad(corrected_tokens, [(1, 1), (0, 0)], constant_values=self.tokenizer.pad_token)
+        input_ids = list(map(self.tokenizer.convert_tokens_to_ids, padded_tokens))
+        input_len = len(padded_tokens)
+        input_ids = np.pad(input_ids,
+                                    [(0, self.seq_length - input_len), (0, 0)],
+                                    constant_values=-100)
+        input_ids = np.swapaxes(input_ids, 0, 1)
+        return {
+            "label_0": input_ids[0],
+            "label_1": input_ids[1],
+            "label_2": input_ids[2]
+        }
 
 
     def generate_dataset(self, dataset_dir):
@@ -263,29 +293,16 @@ class CorrectionDatasetGenerator:
                             for start_index in range(0, input_len, self.seq_length - 2):
                                 modified_tokens = all_modified_tokens[start_index:start_index + self.seq_length - 2]
                                 corrected_tokens = all_corrected_tokens[start_index:start_index + self.seq_length - 2]
-                                modified_chars = [detokenize_char(token) for token in modified_tokens]
-                                # dictionary with keys: 'input_ids', 'attention_mask', 'token_type_ids'
-                                inputs = corrected_tokenizer("".join(modified_chars), self.tokenizer, self.seq_length)
-                                instance_input_ids = inputs["input_ids"]
-                                instance_attention_mask = inputs["attention_mask"]
-                                instance_token_type_ids = inputs["token_type_ids"]
-                                corrected_input_ids = list(map(self.tokenizer.convert_tokens_to_ids, corrected_tokens))
-                                corrected_input_ids = np.pad(corrected_input_ids,
-                                                            [(1, 1), (0, 0)],
-                                                            constant_values=self.tokenizer.pad_token_id)
-                                instance_input_len = len(modified_tokens) + 2
-                                corrected_input_ids = np.pad(corrected_input_ids,
-                                                            [(0, self.seq_length - instance_input_len), (0, 0)],
-                                                            constant_values=-100)
-                                corrected_input_ids = np.swapaxes(corrected_input_ids, 0, 1)
+                                inputs = self.create_input(modified_tokens)
+                                labels = self.create_label(corrected_tokens)
                                 with open("/home/mcsilla/machine_learning/gitrepos/err-corr/test_output.txt", "a") as f:
                                     standard_out = sys.stdout
                                     sys.stdout = f
-                                    print((instance_input_ids, instance_attention_mask, instance_token_type_ids), \
-                                    (corrected_input_ids[0], corrected_input_ids[1], corrected_input_ids[2]))
+                                    print(inputs["input_ids"], "\n", inputs["attention_mask"], "\n", inputs["token_type_ids"], "\n\n",\
+                                    labels["label_0"], "\n", labels["label_1"], "\n", labels["label_2"], "\n\n")
                                     sys.stdout = standard_out
-                                yield (instance_input_ids, instance_attention_mask, instance_token_type_ids), \
-                                    (corrected_input_ids[0], corrected_input_ids[1], corrected_input_ids[2])
+                                yield (inputs["input_ids"], inputs["attention_mask"], inputs["token_type_ids"]), \
+                                    (labels["label_0"], labels["label_1"], labels["label_2"])
 
                     else:
                         document += line
