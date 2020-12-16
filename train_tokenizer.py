@@ -10,8 +10,8 @@ BASE_DIR = Path(__file__).parent
 MIN_FREQ = 2
 SIZE_OF_ALPHABET = 180
 
-def read_vocab(file_path = "data/tokenizer/vocab"):
-    with open(BASE_DIR / file_path, "r") as f:
+def read_vocab(language):
+    with open(BASE_DIR / "data/tokenizer" / language / "vocab", "r") as f:
         content = f.read()
         return content
 
@@ -25,8 +25,8 @@ def prepare_alphabet(vocab):
     return alphabet
 
 
-def write_alphabet_to_file(alphabet, file_path = "data/tokenizer/alphabet"):
-    with open(BASE_DIR / file_path, "w") as f:
+def write_alphabet_to_file(alphabet, language):
+    with open(BASE_DIR / "data/tokenizer" / language / "alphabet", "w") as f:
         for char in alphabet:
             f.write(f"{char}\n")
 
@@ -60,12 +60,13 @@ def main(language):
     )
 
     # save the vocab
-    tokenizer.save("data/tokenizer/vocab")
+    os.makedirs(str(BASE_DIR / "data/tokenizer" / language), exist_ok=True)
+    tokenizer.save(str(BASE_DIR / "data/tokenizer" / language / "vocab"))
 
     # save the alphabet
-    vocab = json.loads(read_vocab())['model']['vocab']
+    vocab = json.loads(read_vocab(language))['model']['vocab']
     alphabet = prepare_alphabet(vocab)
-    write_alphabet_to_file(alphabet)
+    write_alphabet_to_file(alphabet, language)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

@@ -1,0 +1,88 @@
+0	a	á	ā	ä	à	u	ú	ű	ü	û	ù	o	ó
+0	A	Á	Ā	Ä	À
+0	i	l	1	f	í	ï	j	t	r	!	|	I	J	Í
+0	u	ú	ű	ü	û	ù	v	y	ý
+0	U	Ú	Ű	Ü	Û	Ù	V	Y
+0	j	y
+0	v	r
+0	u	ú	ű	ü	û	ù	n
+0	ű	ü	ii	ll	u	ti	it
+0	Ű	Ü	II	LL	U
+0	lc	k	lr	ic	lc	li	lt	h	K	b	ri	ir
+0	b	th
+0	ii	n
+0	II	N
+0	o	ó	ö	ő	ô	õ	e	ë	ê	ë	è	é	c	ç
+0	E	Ë	Ê	Ë	È	É	K
+0	o	ó	ö	ő	ô	õ	Ó	Ő	6	Ö	o'	ó'
+0	O	Ó	Ö	Ő	Ô	Õ	C	Ç	D	0
+0	0	U	Ú	Ű	Ü	Û	Ù	O	Ó	Ö	Ő	Ô	Õ
+0	0	U	Ú	Ű	Ü	Û	Ù	TT
+0	B	ß
+0	rn	m	nn	in	ln	jn	fn	ni	nr	nu	un	tn	ri
+0	M	NN	IN	JN	NI	NU	UN	NV
+0	num	mun
+0	ivi	m
+0	íví	m
+0	IVI	M
+0	ÍVÍ	M
+0	g	q	y
+0	p	o
+0	Ó'	Ő	O'
+0	Ú'	Ű	U'
+0	w	v
+0	W	V
+0	7	z
+0	7	Z
+0	in	vi
+0	IN	VI
+0	b	lo	lc	le
+0	B	E
+0	B	R
+0	K	R
+0	d	ol	cl	oi	ci
+0	d	tl
+0	6	G
+0	.	,	:	;
+1	s[PAD]sz	szsz
+1	s[PAD][PAD]sz	sz-sz
+1	s[PAD]sz	sz sz
+1	c[PAD]cs	cscs
+1	c[PAD][PAD]cs	cs-cs
+1	c[PAD]cs	cs cs
+1	t[PAD]ty	tyty
+1	t[PAD][PAD]ty	ty-ty
+1	t[PAD]ty	ty ty
+1	g[PAD]gy	gygy
+1	g[PAD][PAD]gy	gy-gy
+1	g[PAD]gy	gy gy
+1	l[PAD]ly	lyly
+1	l[PAD][PAD]ly	ly-ly
+1	l[PAD]ly	ly ly
+1	n[PAD]ny	nyny
+1	n[PAD][PAD]ny	ny-ny
+1	n[PAD]ny	ny ny
+1	z[PAD]zs	zszs
+1	z[PAD][PAD]zs	zs-zs
+1	z[PAD]zs	zs zs
+1	S[PAD]SZ	SZSZ
+1	S[PAD][PAD]SZ	SZ-SZ
+1	S[PAD]SZ	SZ SZ
+1	C[PAD]CS	CSCS
+1	C[PAD][PAD]CS	CS-CS
+1	C[PAD]CS	CS CS
+1	T[PAD]TY	TYTY
+1	T[PAD][PAD]TY	TY-TY
+1	T[PAD]TY	TY TY
+1	G[PAD]GY	GYGY
+1	G[PAD][PAD]GY	GY-GY
+1	G[PAD]GY	GY GY
+1	L[PAD]LY	LYLY
+1	L[PAD][PAD]LY	LY-LY
+1	L[PAD]LY	LY LY
+1	N[PAD]NY	NYNY
+1	N[PAD][PAD]NY	NY-NY
+1	N[PAD]NY	NY NY
+1	Z[PAD]ZS	ZSZS
+1	Z[PAD][PAD]ZS	ZS-ZS
+1	Z[PAD]ZS	ZS ZS

@@ -3,6 +3,7 @@ from collections import OrderedDict
 import logging
 import time
 import json
+from pathlib import Path
 
 import tensorflow as tf
 from transformers import BertTokenizerFast
@@ -15,6 +16,7 @@ def main():
 
     # input data and model directories
     parser.add_argument('--config', type=str, required=True)
+    parser.add_argument('--language', type=str, required=True)
 
     args, _ = parser.parse_known_args()
     with open(args.config) as f:
@@ -23,14 +25,18 @@ def main():
         files_paths = config["paths"]
         record_params = config["records"]
 
+    language = args.language
+
     # correction.correction_dataset_generator.SEQ_LENGTH = record_params["sequence_length"]
     # character_tokenizer = BertTokenizerFast.from_pretrained(args.tokenizer_config) # why is from_pretrained needed? 
-    character_tokenizer = BertTokenizerFast(files_paths["vocab_file"], do_lower_case=False) 
+    character_tokenizer = BertTokenizerFast(Path(files_paths["vocab_file_root"]) / language / "alphabet", do_lower_case=False) 
     ocr_errors_generator = ErrorTable(character_tokenizer)
-    with open(files_paths["ocr_errors_general"], encoding="utf-8") as f:
+    with open(Path(files_paths["ocr_errors_root"]) / language / "ocr_errors.txt", encoding="utf-8") as f:
         ocr_errors_generator.load_table_from_file(f)
     dataset_generator = CorrectionDatasetGenerator(character_tokenizer, ocr_errors_generator, record_params["sequence_length"])
-    writer = tf.io.TFRecordWriter(files_paths["output_file"], options="GZIP")
+    output_dir = Path(files_paths["output_file_root"]) / language
+    tf.io.gfile.makedirs(str(output_dir))
+    writer = tf.io.TFRecordWriter(str(output_dir / "tf_record"), options="GZIP")
     logging.basicConfig(level=logging.INFO)
     inst_idx = 0
     start_time = time.time()
