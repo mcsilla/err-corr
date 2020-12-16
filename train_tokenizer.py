@@ -5,7 +5,7 @@ import re
 import os
 import json
 
-SPEC_TOKENS = ['[CLS]', '[SEP]', '[MASK]', '[PAD]', '[UNK]']
+SPEC_TOKENS = ['[PAD]', '[UNK]', '[CLS]', '[SEP]', '[MASK]']
 BASE_DIR = Path(__file__).parent
 MIN_FREQ = 2
 SIZE_OF_ALPHABET = 180
