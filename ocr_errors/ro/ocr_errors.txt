@@ -1,15 +1,19 @@
-a	á	ā	ä	à	u	ú	ű	ü	û	ù	o	ó
+s	ș
+S	Ș
+t	ț
+T	Ț
+a	á	ā	ä	à	u	ú	ű	ü	û	ù	o	ó	ǎ
 A	Á	Ā	Ä	À
-i	l	1	f	í	ï	j	t	r	!	|	I	J	Í
+i	l	1	f	í	ï	j	t	r	!	|	I	J	Í	ț
 u	ú	ű	ü	û	ù	v	y	ý
 U	Ú	Ű	Ü	Û	Ù	V	Y
 j	y
 v	r
 u	ú	ű	ü	û	ù	n
-ű	ü	ii	ll	u	ti	it
+ű	ü	ii	ll	u	ti	it	ți	iț
 Ű	Ü	II	LL	U
-lc	k	lr	ic	lc	li	lt	h	K	b	ri	ir
-b	th
+lc	k	lr	ic	lc	li	lt	h	K	b	ri	ir	lț
+b	th	țh	tn	țn	ln	lh
 ii	n
 II	N
 o	ó	ö	ő	ô	õ	e	ë	ê	ë	è	é	c	ç
@@ -17,9 +21,9 @@ E	Ë	Ê	Ë	È	É	K
 o	ó	ö	ő	ô	õ	Ó	Ő	6	Ö	o'	ó'
 O	Ó	Ö	Ő	Ô	Õ	C	Ç	D	0
 0	U	Ú	Ű	Ü	Û	Ù	O	Ó	Ö	Ő	Ô	Õ
-0	U	Ú	Ű	Ü	Û	Ù	TT
+0	U	Ú	Ű	Ü	Û	Ù	TT	ȚȚ
 B	ß
-rn	m	nn	in	ln	jn	fn	ni	nr	nu	un	tn	ri
+rn	m	nn	in	ln	jn	fn	ni	nr	nu	un	tn	ri	țn
 M	NN	IN	JN	NI	NU	UN	NV
 num	mun
 ivi	m
@@ -41,6 +45,7 @@ B	E
 B	R
 K	R
 d	ol	cl	oi	ci
-d	tl
+d	tl	țl
 6	G
 .	,	:	;
+²	'	"

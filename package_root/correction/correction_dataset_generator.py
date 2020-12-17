@@ -53,7 +53,6 @@ class ErrorTable:
     def add_to_error_table(self, chars1, chars2, error_table):
         tokenized_chars1 = tuple(self.tokenizer.tokenize(chars1))
         tokenized_chars2 = tuple(self.tokenizer.tokenize(chars2))
-        # if there is a general OCR_errors file, then it is possible to have [UNK] here
         if "[UNK]" in tokenized_chars2 or "[UNK]" in tokenized_chars1:
             return
         error_table[tokenized_chars1].append(tokenized_chars2)
@@ -63,9 +62,8 @@ class ErrorTable:
             error_table[tokenized_chars1_hash].append(tokenized_chars2_hash)
 
     def load_table_from_file(self, file_object):
-        csv_reader = csv.reader(file_object, delimiter='\t')
+        csv_reader = csv.reader(file_object, delimiter='\t', quotechar=None)
         error_rows = list(csv_reader)
-
         error_table = defaultdict(list)
         for possible_mistake in error_rows:
             for chars1 in possible_mistake:
@@ -274,7 +272,6 @@ class CorrectionDatasetGenerator:
 
     def generate_dataset(self, dataset_dir):
         input_files = tf.io.gfile.glob(dataset_dir + "*/*")
-        # print(input_files)
         random.shuffle(input_files)
         open("/home/mcsilla/machine_learning/gitrepos/err-corr/test_output.txt", 'w').close()
         for input_file in input_files:
