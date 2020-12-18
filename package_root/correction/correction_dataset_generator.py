@@ -11,13 +11,11 @@ import tensorflow as tf
 
 from official.nlp.bert.tokenization import _is_punctuation
 
-# TODO(mcsilla): not to use global dynamic variables.
-# SEQ_LENGTH=None
 
-def detokenize_char(char_token):
+def detokenize_char(tokenizer, char_token):
     if char_token.startswith("##"):
         return char_token[2:]
-    if char_token in set(['[CLS]', '[SEP]', '[MASK]', '[PAD]', '[UNK]']):
+    if char_token in set([tokenizer.cls_token, '[SEP]', '[MASK]', '[PAD]', '[UNK]']):
         return char_token
     if _is_punctuation(char_token):
         return char_token
@@ -32,11 +30,9 @@ def corrected_tokenizer(sequence, tokenizer, seq_length):
 
 
 class ErrorTable:
-       
     def __init__(self, _tokenizer):
-        self.vocab_set = set(_tokenizer.get_vocab().keys()).difference(set(['[CLS]', '[SEP]', '[MASK]', '[PAD]', '[UNK]']))
-        self.vocab = sorted(self.vocab_set)
         self.tokenizer = _tokenizer
+        self.vocab_set = set(_tokenizer.get_vocab().keys()).difference()
         self.error_table = None
 
     def create_correction(self, tokens_correct, tokens_error):
@@ -90,154 +86,155 @@ class CorrectionDatasetGenerator:
     hyphens = "\xad-"
 
     def __init__(self, _tokenizer, _ocr_errors_generator, _seq_length):
-        self.vocab_set = set(_tokenizer.get_vocab().keys()).difference(set(['[CLS]', '[SEP]', '[MASK]', '[PAD]', '[UNK]']))
-        self.vocab = sorted(self.vocab_set)
         self.tokenizer = _tokenizer
+        non_vocab_tokens = (
+            self.tokenizer.cls_token,
+            self.tokenizer.sep_token,
+            self.tokenizer.mask_token, 
+            self.tokenizer.pad_token)
+        self.vocab_set = set(_tokenizer.get_vocab().keys()).difference(non_vocab_tokens)
+        self.vocab = sorted(self.vocab_set)
         self.seq_length = _seq_length
         self.corr_gen = _ocr_errors_generator
 
+        self._tokens = None
+        self._error_tokens = None
+        self._correct_tokens = None
+
     
-    def replace_with_random_token(self, tokens, error_tokens, correct_tokens, token_idx):
-        error_tokens.append(random.choice(self.vocab)) # can it be special token?
-        correct_tokens.append([tokens[token_idx]])
+    def replace_with_random_token(self, token_idx):
+        self._error_tokens.append(random.choice(self.vocab))
+        self._correct_tokens.append([self._tokens[token_idx]])
 
 
-    def delete_token(self, tokens, correct_tokens, token_idx):
-        correct_tokens[-1].append(tokens[token_idx])
+    def delete_token(self, token_idx):
+        self._correct_tokens[-1].append(self._tokens[token_idx])
 
 
-    def add_extra_token(self, tokens, error_tokens, correct_tokens, token_idx):
-        if random.random() < 0.2 or token_idx >= len(tokens) - 1: # in this case there is no next_token
-            error_tokens.append(random.choice(self.vocab))
-            correct_tokens.append([self.tokenizer.pad_token])
+    def add_extra_token(self, token_idx):
+        if random.random() < 0.2 or token_idx >= len(self._tokens) - 1:
+            self._error_tokens.append(random.choice(self.vocab))
             return token_idx
         else:
             extra_token = random.choice(self.common_extra_chars)
             if random.random() < 0.6:
                 extra_token = random.choice(self.hyphens)
-            error_tokens.append(extra_token)
-            correct_tokens.append([self.tokenizer.pad_token])
-            next_token = tokens[token_idx]
+            self._error_tokens.append(extra_token)
+            self._correct_tokens.append([self.tokenizer.pad_token])
+            next_token = self._tokens[token_idx]
             if next_token.startswith("##") and random.random() < 0.8:
                 next_token = next_token[2:]
-            error_tokens.append(next_token)
-            correct_tokens.append([tokens[token_idx]])
+            self._error_tokens.append(next_token)
+            self._correct_tokens.append([self._tokens[token_idx]])
             return token_idx + 1
 
-    def add_space(self, tokens, error_tokens, correct_tokens, token_idx):
-        error_tokens.append("##" + tokens[token_idx])
-        correct_tokens.append([tokens[token_idx]])
+    def add_space(self, token_idx):
+        self._error_tokens.append("##" + self._tokens[token_idx])
+        self._correct_tokens.append([self._tokens[token_idx]])
 
 
-    def remove_space(self, tokens, error_tokens, correct_tokens, token_idx):
-        error_tokens.append(tokens[token_idx][2:])
-        correct_tokens.append([tokens[token_idx]])
+    def remove_space(self, token_idx):
+        self._error_tokens.append(self._tokens[token_idx][2:])
+        self._correct_tokens.append([self._tokens[token_idx]])
 
 
-    def make_ocr_typo(self, tokens, error_tokens, correct_tokens, token_idx):
+    def make_ocr_typo(self, token_idx):
         in_table = []
         for i in range(3):
-            if self.corr_gen.get_error(tokens[token_idx:token_idx + i + 1]):
+            if self.corr_gen.get_error(self._tokens[token_idx:token_idx + i + 1]):
                 in_table.append(i)
         if in_table:
             join_tokens = random.choice(in_table)
-            slice_correct_tokens = tokens[token_idx:token_idx + join_tokens + 1]
+            slice_correct_tokens = self._tokens[token_idx:token_idx + join_tokens + 1]
             slice_error_tokens = self.corr_gen.get_error(slice_correct_tokens)
-            correct_tokens.extend(self.corr_gen.create_correction(slice_correct_tokens, slice_error_tokens))
-            error_tokens.extend(slice_error_tokens)
+            self._correct_tokens.extend(self.corr_gen.create_correction(slice_correct_tokens, slice_error_tokens))
+            self._error_tokens.extend(slice_error_tokens)
             return token_idx + join_tokens + 1
         else:
-            error_tokens.append(random.choice(self.vocab))
-            correct_tokens.append([tokens[token_idx]])
+            self._error_tokens.append(random.choice(self.vocab))
+            self._correct_tokens.append([self._tokens[token_idx]])
             return token_idx + 1
 
-    def make_sparse(self, error_tokens):
-        for sequence_start in range(0, len(error_tokens), self.seq_length - 2):
+    def make_sparse(self):
+        for sequence_start in range(0, len(self._error_tokens), self.seq_length - 2):
             if random.random() < self.sparse_frequency:
                 for sparse_idx in range(0, 10):
                     sparse_start = random.randint(sequence_start,
-                                                  min(sequence_start + self.seq_length - 2, len(error_tokens)))
+                                                  min(sequence_start + self.seq_length - 2, len(self._error_tokens)))
                     sparse_length = random.randint(1, 20)
-                    for token_idx in range(sparse_start, min(sparse_start + sparse_length, len(error_tokens))):
-                        if error_tokens[token_idx].startswith("##"):
-                            error_tokens[token_idx] = error_tokens[token_idx][2:]
+                    for token_idx in range(sparse_start, min(sparse_start + sparse_length, len(self._error_tokens))):
+                        if self._error_tokens[token_idx].startswith("##"):
+                            self._error_tokens[token_idx] = self._error_tokens[token_idx][2:]
 
-    def make_dense(self, error_tokens):
-        for sequence_start in range(0, len(error_tokens), self.seq_length - 2):
+    def make_dense(self):
+        for sequence_start in range(0, len(self._error_tokens), self.seq_length - 2):
             if random.random() < self.dense_frequency:
                 for dense_idx in range(0, 10):
                     dense_start = random.randint(sequence_start,
-                                                  min(sequence_start + self.seq_length - 2, len(error_tokens)))
+                                                  min(sequence_start + self.seq_length - 2, len(self._error_tokens)))
                     dense_length = random.randint(1, 20)
-                    for token_idx in range(dense_start, min(dense_start + dense_length, len(error_tokens))):
-                        if len(error_tokens[token_idx]) == 1 and "##" + error_tokens[token_idx] in self.vocab_set:
-                            error_tokens[token_idx] = "##" + error_tokens[token_idx]
+                    for token_idx in range(dense_start, min(dense_start + dense_length, len(self._error_tokens))):
+                        if len(self._error_tokens[token_idx]) == 1 and "##" + self._error_tokens[token_idx] in self.vocab_set:
+                            self._error_tokens[token_idx] = "##" + self._error_tokens[token_idx]
 
-    def reset_space_after_punctuation(self, error_tokens):
-        for token_idx in range(1, len(error_tokens)):
-            if error_tokens[token_idx].startswith("##") and len(error_tokens[token_idx - 1]) == 1 and _is_punctuation(
-                    error_tokens[token_idx - 1]):
-                error_tokens[token_idx] = error_tokens[token_idx][2:]
+    def reset_space_after_punctuation(self):
+        for token_idx in range(1, len(self._error_tokens)):
+            if self._error_tokens[token_idx].startswith("##") and len(self._error_tokens[token_idx - 1]) == 1 and _is_punctuation(
+                    self._error_tokens[token_idx - 1]):
+                self._error_tokens[token_idx] = self._error_tokens[token_idx][2:]
 
-    def pad_to_length_3(self, correct_tokens):
-        for correct_token in correct_tokens:
+    def pad_to_length_3(self):
+        for correct_token in self._correct_tokens:
             correct_token += [self.tokenizer.pad_token] * (3 - len(correct_token))
 
-    def run(self, tokens, doc):
-        error_tokens = []
-        correct_tokens = []
+    def run(self, tokens):
+        self._tokens = tokens
+        self._error_tokens = []
+        self._correct_tokens = []
         token_idx = 0
         random.seed(42)
-        while token_idx < len(tokens):
+        while token_idx < len(self._tokens):
             if random.random() < self.error_frequency: # random.random() in [0, 1)
                 if random.random() < 0.1:
-                    self.replace_with_random_token(tokens, error_tokens, correct_tokens, token_idx)
+                    self.replace_with_random_token(token_idx)
                     token_idx += 1    
-                elif random.random() < 0.05 and correct_tokens and len(correct_tokens[-1]) < 3:
-                    self.delete_token(tokens, correct_tokens, token_idx)
+                elif random.random() < 0.05 and self._correct_tokens and len(self._correct_tokens[-1]) < 3:
+                    self.delete_token(token_idx)
                     token_idx += 1
                 elif random.random() < 0.05:
-                    token_idx = self.add_extra_token(tokens, error_tokens, correct_tokens, token_idx)
-                # Swap
-                # elif random.random() < 0.05 and token_idx < len(tokens) - 1:
-                #     error_tokens.append(tokens[token_idx + 1])
-                #     error_tokens.append(tokens[token_idx])
-                #     correct_tokens.append([tokens[token_idx], self.tokenizer.pad_token, self.tokenizer.pad_token])
-                #     correct_tokens.append([tokens[token_idx + 1], self.tokenizer.pad_token, self.tokenizer.pad_token])
-                #     token_idx += 2
-                # Add space
-                elif random.random() < 0.1 and "##" + tokens[token_idx] in self.vocab_set:
-                    self.add_space(tokens, error_tokens, correct_tokens, token_idx)
+                    token_idx = self.add_extra_token(token_idx)
+                elif random.random() < 0.1 and "##" + self._tokens[token_idx] in self.vocab_set:
+                    self.add_space(token_idx)
                     token_idx += 1
-                elif random.random() < 0.1 and tokens[token_idx].startswith("##") and \
-                        tokens[token_idx][2:] in self.vocab_set:
-                    self.remove_space(tokens, error_tokens, correct_tokens, token_idx)
+                elif random.random() < 0.1 and self._tokens[token_idx].startswith("##") and \
+                        self._tokens[token_idx][2:] in self.vocab_set:
+                    self.remove_space(token_idx)
                     token_idx += 1
                 else:
-                    token_idx = self.make_ocr_typo(tokens, error_tokens, correct_tokens, token_idx)
+                    token_idx = self.make_ocr_typo(token_idx)
             else:
-                error_tokens.append(tokens[token_idx])
-                correct_tokens.append([tokens[token_idx]])
+                self._error_tokens.append(tokens[token_idx])
+                self._correct_tokens.append([tokens[token_idx]])
                 token_idx += 1
 
 
 
-        self.make_sparse(error_tokens)
+        self.make_sparse()
 
-        self.make_dense(error_tokens)
+        self.make_dense()
 
-        self.reset_space_after_punctuation(error_tokens)
+        self.reset_space_after_punctuation()
 
-        self.pad_to_length_3(correct_tokens)
+        self.pad_to_length_3()
 
         # with open("/home/mcsilla/machine_learning/gitrepos/err-corr/test_output.txt", "w") as f:
         #     standard_out = sys.stdout
         #     sys.stdout = f
-        #     print("Error tokens: \n\n", error_tokens, "\n\n Correction tokens: \n\n", correct_tokens)
+        #     print("Error tokens: \n\n", self._error_tokens, "\n\n Correction tokens: \n\n", correct_tokens)
         #     # print("alma")
         #     sys.stdout = standard_out
 
-        return error_tokens, correct_tokens
+        return self._error_tokens, self._correct_tokens
     
     def create_input(self, tokens):
         modified_tokens = [self.tokenizer.cls_token] + tokens + [self.tokenizer.sep_token]
@@ -285,7 +282,7 @@ class CorrectionDatasetGenerator:
                             document = ""
                             if not tokens:
                                 continue
-                            all_modified_tokens, all_corrected_tokens = self.run(tokens, doc)
+                            all_modified_tokens, all_corrected_tokens = self.run(tokens)
                             input_len = len(all_modified_tokens)
                             for start_index in range(0, input_len, self.seq_length - 2):
                                 modified_tokens = all_modified_tokens[start_index:start_index + self.seq_length - 2]
@@ -311,7 +308,7 @@ def int64feature(int_list):
 
 def printable_format(tokenizer, token_ids):
     tokens = tokenizer.convert_ids_to_tokens([token_id for token_id in token_ids if token_id >= 0])
-    return "".join([detokenize_char(token) for token in tokens])
+    return "".join([detokenize_char(tokenizer, token) for token in tokens])
 
 
 def write_examples_to_tfrecord(examples, tf_records_writer):
