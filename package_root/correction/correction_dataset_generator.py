@@ -114,6 +114,7 @@ class CorrectionDatasetGenerator:
     def add_extra_token(self, token_idx):
         if random.random() < 0.2 or token_idx >= len(self._tokens) - 1:
             self._error_tokens.append(random.choice(self.vocab))
+            self._correct_tokens.append([self.tokenizer.pad_token])
             return token_idx
         else:
             extra_token = random.choice(self.common_extra_chars)
@@ -268,7 +269,7 @@ class CorrectionDatasetGenerator:
 
 
     def generate_dataset(self, dataset_dir):
-        input_files = tf.io.gfile.glob(dataset_dir + "*/*")
+        input_files = tf.io.gfile.glob(dataset_dir + "/*/wiki_*")
         random.shuffle(input_files)
         # open("/home/mcsilla/machine_learning/gitrepos/err-corr/test_output.txt", 'w').close()
         for input_file in input_files:

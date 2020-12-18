@@ -4,6 +4,7 @@ import logging
 import time
 import json
 from pathlib import Path
+import tqdm
 
 import tensorflow as tf
 from transformers import BertTokenizerFast
@@ -42,7 +43,7 @@ def main():
 
     for repeat in range(record_params["dupe_factor"]):
         example_cache = []
-        for inputs, outputs in generate_dataset(files_paths["dataset_dir"]):
+        for inputs, outputs in dataset_generator.generate_dataset(files_paths["dataset_dir"]):
         # for inputs, outputs in dataset_generator.generate_dataset(files_paths["test_input_dir"]):
             inst_idx += 1
             feature = OrderedDict()
