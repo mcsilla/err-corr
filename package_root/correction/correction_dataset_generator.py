@@ -192,7 +192,7 @@ class CorrectionDatasetGenerator:
         self._error_tokens = []
         self._correct_tokens = []
         token_idx = 0
-        random.seed(42)
+        # random.seed(42)
         while token_idx < len(self._tokens):
             if random.random() < self.error_frequency: # random.random() in [0, 1)
                 if random.random() < 0.1:
@@ -270,7 +270,7 @@ class CorrectionDatasetGenerator:
     def generate_dataset(self, dataset_dir):
         input_files = tf.io.gfile.glob(dataset_dir + "*/*")
         random.shuffle(input_files)
-        open("/home/mcsilla/machine_learning/gitrepos/err-corr/test_output.txt", 'w').close()
+        # open("/home/mcsilla/machine_learning/gitrepos/err-corr/test_output.txt", 'w').close()
         for input_file in input_files:
             with tf.io.gfile.GFile(input_file, mode='r') as inf:
                 document = ""
@@ -289,12 +289,12 @@ class CorrectionDatasetGenerator:
                                 corrected_tokens = all_corrected_tokens[start_index:start_index + self.seq_length - 2]
                                 inputs = self.create_input(modified_tokens)
                                 labels = self.create_label(corrected_tokens)
-                                with open("/home/mcsilla/machine_learning/gitrepos/err-corr/test_output.txt", "a") as f:
-                                    standard_out = sys.stdout
-                                    sys.stdout = f
-                                    print(inputs["input_ids"], "\n", inputs["attention_mask"], "\n", inputs["token_type_ids"], "\n\n",\
-                                    labels["label_0"], "\n", labels["label_1"], "\n", labels["label_2"], "\n\n")
-                                    sys.stdout = standard_out
+                                # with open("/home/mcsilla/machine_learning/gitrepos/err-corr/test_output.txt", "a") as f:
+                                #     standard_out = sys.stdout
+                                #     sys.stdout = f
+                                #     print(inputs["input_ids"], "\n", inputs["attention_mask"], "\n", inputs["token_type_ids"], "\n\n",\
+                                #     labels["label_0"], "\n", labels["label_1"], "\n", labels["label_2"], "\n\n")
+                                #     sys.stdout = standard_out
                                 yield (inputs["input_ids"], inputs["attention_mask"], inputs["token_type_ids"]), \
                                     (labels["label_0"], labels["label_1"], labels["label_2"])
 
