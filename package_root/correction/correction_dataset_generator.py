@@ -5,7 +5,7 @@ import random
 import csv
 from pathlib import Path
 import sys
-
+import tqdm
 import numpy as np
 import tensorflow as tf
 
@@ -269,12 +269,12 @@ class CorrectionDatasetGenerator:
 
 
     def generate_dataset(self, dataset_dir):
-        # input_files = tf.io.gfile.glob(dataset_dir + "/*/wiki_*")
-        input_files = tf.io.gfile.glob(dataset_dir + "/*")
-        print(input_files)
+        input_files = tf.io.gfile.glob(dataset_dir + "/*/wiki_*")
+        # input_files = tf.io.gfile.glob(dataset_dir + "/*")
+        # print(input_files)
         random.shuffle(input_files)
         # open("/home/mcsilla/machine_learning/gitrepos/err-corr/test_output.txt", 'w').close()
-        for input_file in input_files:
+        for input_file in tqdm.tqdm(input_files):
             with tf.io.gfile.GFile(input_file, mode='r') as inf:
                 document_lines = []
                 for line in inf:
@@ -299,7 +299,6 @@ class CorrectionDatasetGenerator:
                                 #     print(inputs["input_ids"], "\n", inputs["attention_mask"], "\n", inputs["token_type_ids"], "\n\n",\
                                 #     labels["label_0"], "\n", labels["label_1"], "\n", labels["label_2"], "\n\n")
                                 #     sys.stdout = standard_out
-                                print(len(inputs["input_ids"]), len(inputs["attention_mask"]), len(inputs["token_type_ids"]), len(labels["label_0"]), len(labels["label_1"]), len(labels["label_2"]))
                                 yield (inputs["input_ids"], inputs["attention_mask"], inputs["token_type_ids"]), \
                                     (labels["label_0"], labels["label_1"], labels["label_2"])
                     else:
