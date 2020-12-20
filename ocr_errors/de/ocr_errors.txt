@@ -1,0 +1,46 @@
+a	á	ā	ä	à	u	ú	ű	ü	û	ù	o	ó   ō
+A	Á	Ā	Ä	À
+i	l	1	f	í	ï	j	t	r	!	|	I	J	Í
+u	ú	ű	ü	û	ù	v	y	ý
+U	Ú	Ű	Ü	Û	Ù	V	Y
+j	y
+v	r
+u	ú	ű	ü	û	ù	n   ū
+ű	ü	ii	ll	u	ti	it
+Ű	Ü	II	LL	U
+lc	k	lr	ic	lc	li	lt	h	K	b	ri	ir
+b	th
+ii	n
+II	N
+o	ó	ö	ő	ô	õ	e	ë	ê	ë	è	é	c	ç   ō
+E	Ë	Ê	Ë	È	É	K
+o	ó	ö	ő	ô	õ	Ó	Ő	6	Ö	o'	ó'
+O	Ó	Ö	Ő	Ô	Õ	C	Ç	D	0
+0	U	Ú	Ű	Ü	Û	Ù	O	Ó	Ö	Ő	Ô	Õ
+0	U	Ú	Ű	Ü	Û	Ù	TT
+B	ß
+rn	m	nn	in	ln	jn	fn	ni	nr	nu	un	tn	ri
+M	NN	IN	JN	NI	NU	UN	NV
+num	mun
+ivi	m
+íví	m
+IVI	M
+ÍVÍ	M
+g	q	y
+p	o
+Ó'	Ő	O'
+Ú'	Ű	U'
+w	v
+W	V
+7	z
+7	Z
+in	vi
+IN	VI
+b	lo	lc	le
+B	E
+B	R
+K	R
+d	ol	cl	oi	ci
+d	tl
+6	G
+.	,	:	;
