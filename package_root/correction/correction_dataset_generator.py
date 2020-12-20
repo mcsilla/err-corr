@@ -269,38 +269,46 @@ class CorrectionDatasetGenerator:
 
 
     def generate_dataset(self, dataset_dir):
-        input_files = tf.io.gfile.glob(dataset_dir + "/*/wiki_*")
+        # input_files = tf.io.gfile.glob(dataset_dir + "/*/wiki_*")
+        input_files = tf.io.gfile.glob(dataset_dir + "/*")
+        print(input_files)
         random.shuffle(input_files)
         # open("/home/mcsilla/machine_learning/gitrepos/err-corr/test_output.txt", 'w').close()
         for input_file in input_files:
             with tf.io.gfile.GFile(input_file, mode='r') as inf:
-                document = ""
+                documents = []
+                document_lines = []
                 for line in inf:
                     if not line.strip(): # if there are only white spaces in line 
-                        document_upper = document.upper()
-                        for doc in (document, document_upper):
-                            tokens = self.tokenizer.tokenize(doc) # tokenize the textblocks between empty lines
-                            document = ""
-                            if not tokens:
-                                continue
-                            all_modified_tokens, all_corrected_tokens = self.run(tokens)
-                            input_len = len(all_modified_tokens)
-                            for start_index in range(0, input_len, self.seq_length - 2):
-                                modified_tokens = all_modified_tokens[start_index:start_index + self.seq_length - 2]
-                                corrected_tokens = all_corrected_tokens[start_index:start_index + self.seq_length - 2]
-                                inputs = self.create_input(modified_tokens)
-                                labels = self.create_label(corrected_tokens)
-                                # with open("/home/mcsilla/machine_learning/gitrepos/err-corr/test_output.txt", "a") as f:
-                                #     standard_out = sys.stdout
-                                #     sys.stdout = f
-                                #     print(inputs["input_ids"], "\n", inputs["attention_mask"], "\n", inputs["token_type_ids"], "\n\n",\
-                                #     labels["label_0"], "\n", labels["label_1"], "\n", labels["label_2"], "\n\n")
-                                #     sys.stdout = standard_out
-                                yield (inputs["input_ids"], inputs["attention_mask"], inputs["token_type_ids"]), \
-                                    (labels["label_0"], labels["label_1"], labels["label_2"])
-
+                        documents.append("".join(document_lines))
+                        document_lines = []
                     else:
-                        document += line
+                        document_lines.append(line)
+
+                random.shuffle(documents)
+                for document in documents:
+                    document_upper = document.upper()
+                    for doc in (document, document_upper):
+                        tokens = self.tokenizer.tokenize(doc) # tokenize the textblocks between empty lines
+                        document_lines = []
+                        if not tokens:
+                            continue
+                        all_modified_tokens, all_corrected_tokens = self.run(tokens)
+                        input_len = len(all_modified_tokens)
+                        for start_index in range(0, input_len, self.seq_length - 2):
+                            modified_tokens = all_modified_tokens[start_index:start_index + self.seq_length - 2]
+                            corrected_tokens = all_corrected_tokens[start_index:start_index + self.seq_length - 2]
+                            inputs = self.create_input(modified_tokens)
+                            labels = self.create_label(corrected_tokens)
+                            # with open("/home/mcsilla/machine_learning/gitrepos/err-corr/test_output.txt", "a") as f:
+                            #     standard_out = sys.stdout
+                            #     sys.stdout = f
+                            #     print(inputs["input_ids"], "\n", inputs["attention_mask"], "\n", inputs["token_type_ids"], "\n\n",\
+                            #     labels["label_0"], "\n", labels["label_1"], "\n", labels["label_2"], "\n\n")
+                            #     sys.stdout = standard_out
+                            yield (inputs["input_ids"], inputs["attention_mask"], inputs["token_type_ids"]), \
+                                (labels["label_0"], labels["label_1"], labels["label_2"])
+
 
 
 def int64feature(int_list):

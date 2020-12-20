@@ -43,8 +43,8 @@ def main():
 
     for repeat in range(record_params["dupe_factor"]):
         example_cache = []
-        for inputs, outputs in dataset_generator.generate_dataset(files_paths["dataset_dir"]):
-        # for inputs, outputs in dataset_generator.generate_dataset(files_paths["test_input_dir"]):
+        # for inputs, outputs in dataset_generator.generate_dataset(files_paths["dataset_dir"]):
+        for inputs, outputs in dataset_generator.generate_dataset(files_paths["test_input_dir"]):
             inst_idx += 1
             feature = OrderedDict()
             feature['input_ids'] = int64feature(inputs[0])
