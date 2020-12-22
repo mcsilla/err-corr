@@ -1,18 +1,18 @@
-a	á	ā	ä	à	u	ú	ű	ü	û	ù	o	ó   ō
+a	á	ā	ä	à	u	ú	ű	ü	û	ù	o	ó	ō
 A	Á	Ā	Ä	À
 i	l	1	f	í	ï	j	t	r	!	|	I	J	Í
 u	ú	ű	ü	û	ù	v	y	ý
 U	Ú	Ű	Ü	Û	Ù	V	Y
 j	y
 v	r
-u	ú	ű	ü	û	ù	n   ū
+u	ú	ű	ü	û	ù	n	ū
 ű	ü	ii	ll	u	ti	it
 Ű	Ü	II	LL	U
 lc	k	lr	ic	lc	li	lt	h	K	b	ri	ir
 b	th
 ii	n
 II	N
-o	ó	ö	ő	ô	õ	e	ë	ê	ë	è	é	c	ç   ō
+o	ó	ö	ő	ô	õ	e	ë	ê	ë	è	é	c	ç	ō
 E	Ë	Ê	Ë	È	É	K
 o	ó	ö	ő	ô	õ	Ó	Ő	6	Ö	o'	ó'
 O	Ó	Ö	Ő	Ô	Õ	C	Ç	D	0
