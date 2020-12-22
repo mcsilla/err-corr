@@ -19,7 +19,6 @@ def main():
     parser.add_argument('--config', type=str, required=True)
     parser.add_argument('--output', type=int, required=True)
     parser.add_argument('--thread', type=int, required=True)
-    parser.add_argument('--language', type=str, required=True)
 
     args, _ = parser.parse_known_args()
     with open(args.config) as f:
@@ -29,14 +28,12 @@ def main():
         record_params = config["records"]
         seed_input = config["seed"]
 
-    language = args.language
-
-    character_tokenizer = BertTokenizerFast(Path(files_paths["vocab_file_root"]) / language / "alphabet", do_lower_case=False) 
+    character_tokenizer = BertTokenizerFast(Path(files_paths["vocab_file"]), do_lower_case=False) 
     ocr_errors_generator = ErrorTable(character_tokenizer)
-    with open(Path(files_paths["ocr_errors_root"]) / language / "ocr_errors.txt", encoding="utf-8") as f:
+    with open(Path(files_paths["ocr_errors"]), encoding="utf-8") as f:
         ocr_errors_generator.load_table_from_file(f)
     dataset_generator = CorrectionDatasetGenerator(character_tokenizer, ocr_errors_generator, record_params["sequence_length"])
-    output_dir = Path(files_paths["output_file_root"]) / language
+    output_dir = Path(files_paths["output_file_root"])
     tf.io.gfile.makedirs(str(output_dir))
     writer = tf.io.TFRecordWriter(str(output_dir / f"tf_record_{args.output}"), options="GZIP")
     logging.basicConfig(level=logging.INFO)

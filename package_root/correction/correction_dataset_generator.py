@@ -271,8 +271,8 @@ class CorrectionDatasetGenerator:
     def generate_dataset(self, dataset_dir, thread, seed_input):
         NUM_OF_THREADS = 16
         input_files = sorted(tf.io.gfile.glob(dataset_dir + "/*/wiki_*"))
-        random.seed(seed_input)
-        random.shuffle(input_files)
+        #random.seed(seed_input)
+        #random.shuffle(input_files)
         # input_files = tf.io.gfile.glob(dataset_dir + "/*")
         thread_input_length = len(input_files) // NUM_OF_THREADS
         if (len(input_files) % NUM_OF_THREADS):

@@ -1,0 +1,13 @@
+{
+    "paths": {
+        "vocab_file": "gs://arcanum-ml/nlp/bert/corr/de-vocab",
+        "ocr_errors": "gs://arcanum-ml/nlp/bert/corr/de-ocr-errors",
+        "dataset_dir": "gs://arcanum-ml/nlp/bert/corr/de-input-raw",
+        "output_file_root": "output",
+    },
+    "records": {
+        "sequence_length": 256,
+        "dupe_factor": 1
+    },
+    "seed": 42
+}
