@@ -268,13 +268,20 @@ class CorrectionDatasetGenerator:
         }
 
 
-    def generate_dataset(self, dataset_dir):
-        input_files = tf.io.gfile.glob(dataset_dir + "/*/wiki_*")
-        # input_files = tf.io.gfile.glob(dataset_dir + "/*")
-        # print(input_files)
+    def generate_dataset(self, dataset_dir, thread, seed_input):
+        NUM_OF_THREADS = 16
+        input_files = sorted(tf.io.gfile.glob(dataset_dir + "/*/wiki_*"))
+        random.seed(seed_input)
         random.shuffle(input_files)
+        # input_files = tf.io.gfile.glob(dataset_dir + "/*")
+        thread_input_length = len(input_files) // NUM_OF_THREADS
+        if (len(input_files) % NUM_OF_THREADS):
+            thread_input_length += 1 
+        thread_start = (thread - 1) * thread_input_length
+        thread_input_files = input_files[thread_start:thread_start + thread_input_length]
+        print(thread_input_files)
         # open("/home/mcsilla/machine_learning/gitrepos/err-corr/test_output.txt", 'w').close()
-        for input_file in tqdm.tqdm(input_files):
+        for input_file in tqdm.tqdm(thread_input_files):
             with tf.io.gfile.GFile(input_file, mode='r') as inf:
                 document_lines = []
                 for line in inf:
