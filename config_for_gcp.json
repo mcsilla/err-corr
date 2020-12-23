@@ -1,9 +1,9 @@
 {
     "paths": {
-        "vocab_file": "gs://arcanum-ml/nlp/bert/corr/de-vocab",
-        "ocr_errors": "gs://arcanum-ml/nlp/bert/corr/de-ocr-errors",
+        "vocab_file": "de-vocab",
+        "ocr_errors": "de-ocr-errors",
         "dataset_dir": "gs://arcanum-ml/nlp/bert/corr/de-input-raw",
-        "output_file_root": "output",
+        "output_file_root": "output"
     },
     "records": {
         "sequence_length": 256,
