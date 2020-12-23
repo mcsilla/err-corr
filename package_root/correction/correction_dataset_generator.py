@@ -279,7 +279,7 @@ class CorrectionDatasetGenerator:
             thread_input_length += 1 
         thread_start = (thread - 1) * thread_input_length
         thread_input_files = input_files[thread_start:thread_start + thread_input_length]
-        print(thread_input_files)
+        # print(thread_input_files)
         # open("/home/mcsilla/machine_learning/gitrepos/err-corr/test_output.txt", 'w').close()
         for input_file in tqdm.tqdm(thread_input_files):
             with tf.io.gfile.GFile(input_file, mode='r') as inf:
