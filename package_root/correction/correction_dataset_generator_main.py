@@ -70,7 +70,6 @@ def main():
                 logging.info("text_corrected1: " + str(printable_format(character_tokenizer, outputs[0])))
                 # logging.info("text_corrected2: " + str(printable_format(character_tokenizer, outputs[1])))
                 # logging.info("text_corrected3: " + str(printable_format(character_tokenizer, outputs[2])))
-            break
         write_examples_to_tfrecord(example_cache, writer)
 
     writer.close()
