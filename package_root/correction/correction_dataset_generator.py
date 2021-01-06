@@ -178,6 +178,9 @@ class CorrectionDatasetGenerator:
                         if len(self._error_tokens[token_idx]) == 1 and "##" + self._error_tokens[token_idx] in self.vocab_set:
                             self._error_tokens[token_idx] = "##" + self._error_tokens[token_idx]
 
+    def make_old(self):
+        pass
+
     def reset_space_after_punctuation(self):
         for token_idx in range(1, len(self._error_tokens)):
             if self._error_tokens[token_idx].startswith("##") and len(self._error_tokens[token_idx - 1]) == 1 and _is_punctuation(
