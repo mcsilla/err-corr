@@ -1,3 +1,7 @@
+# a tokens tömbön lehetne futtatni azt, hogy 256-onként néha régiesít de
+# régiesítve nem ugyanannyi karakter lesz
+# az errorizálás is módosítja a karakterek számát 
+
 from copy import deepcopy
 import itertools
 from collections import defaultdict
@@ -8,6 +12,7 @@ import sys
 import tqdm
 import numpy as np
 import tensorflow as tf
+import re
 
 from official.nlp.bert.tokenization import _is_punctuation
 
@@ -22,12 +27,14 @@ def detokenize_char(tokenizer, char_token):
     return (" " + char_token)
 
 
-def corrected_tokenizer(sequence, tokenizer, seq_length):
-    ids_object = tokenizer(text="a" + sequence, padding='max_length', max_length=seq_length + 1)
-    for key in ids_object:
-        ids_object[key] = ids_object[key][:1] + ids_object[key][2:]
-    return ids_object
+# def corrected_tokenizer(sequence, tokenizer, seq_length):
+#     ids_object = tokenizer(text="a" + sequence, padding='max_length', max_length=seq_length + 1)
+#     for key in ids_object:
+#         ids_object[key] = ids_object[key][:1] + ids_object[key][2:]
+#     return ids_object
 
+def corrected_tokenizer(sequence, tokenizer):
+    return tokenizer.tokenize("a" + sequence)[1:]
 
 class ErrorTable:
     def __init__(self, _tokenizer):
@@ -82,8 +89,11 @@ class CorrectionDatasetGenerator:
     error_frequency = 0.15
     sparse_frequency = 0.2
     dense_frequency = 0.2
+    old_frequency = 0.1
     common_extra_chars = "{}jli;|\\/(:)!1.t'"
     hyphens = "\xad-"
+    pat_sz = re.compile("(?<!s)sz")
+    pat_ssz = re.compile("ssz")
 
     def __init__(self, _tokenizer, _ocr_errors_generator, _seq_length):
         self.tokenizer = _tokenizer
@@ -194,6 +204,69 @@ class CorrectionDatasetGenerator:
         for correct_token in self._correct_tokens:
             correct_token += [self.tokenizer.pad_token] * (3 - len(correct_token))
 
+    def run_old(self, tokens):
+        self._tokens = tokens
+        self._error_tokens = []
+        self._correct_tokens = []
+        token_idx = 0
+        while token_idx < len(self._tokens):
+            if "".join(tokens[token_idx:token_idx + 3]) == "##s##s##z":
+                self._error_tokens += ["##f", "##z", "##f", "##z"]
+                self._correct_tokens += [["##s"], ["##s"], ["##z"], [self.tokenizer.pad_token]]
+                token_idx += 3
+            if "".join(tokens[token_idx:token_idx + 3]) == "s##s##z":
+                self._error_tokens += ["f", "##z", "##f", "##z"]
+                self._correct_tokens += [["s"], ["##s"], ["##z"], [self.tokenizer.pad_token]]
+                token_idx += 3
+            if "".join(tokens[token_idx:token_idx + 2]) == "##s##z":
+                self._error_tokens += ["##f", "##z"]
+                self._correct_tokens += [["##s"], ["##z"]]
+                token_idx += 2
+            if "".join(tokens[token_idx:token_idx + 2]) == "s##z":
+                self._error_tokens += ["f", "##z"]
+                self._correct_tokens += [["s"], ["##z"]]
+                token_idx += 2
+            if "".join(tokens[token_idx:token_idx + 2]) == "##n##b":
+                self._error_tokens += ["##m", "##b"]
+                self._correct_tokens += [["##n"], ["##b"]]
+                token_idx += 2
+            if  tokens[token_idx] == "a" and len(tokens[token_idx + 1]) < 3:
+                self._error_tokens += ["a", "'"]
+                self._correct_tokens += [["a"], [self.tokenizer.pad_token]]
+                token_idx += 2                
+            if random.random() < self.error_frequency: # random.random() in [0, 1)
+                if random.random() < 0.1:
+                    self.replace_with_random_token(token_idx)
+                    token_idx += 1    
+                elif random.random() < 0.05 and self._correct_tokens and len(self._correct_tokens[-1]) < 3:
+                    self.delete_token(token_idx)
+                    token_idx += 1
+                elif random.random() < 0.05:
+                    token_idx = self.add_extra_token(token_idx)
+                elif random.random() < 0.1 and "##" + self._tokens[token_idx] in self.vocab_set:
+                    self.add_space(token_idx)
+                    token_idx += 1
+                elif random.random() < 0.1 and self._tokens[token_idx].startswith("##") and \
+                        self._tokens[token_idx][2:] in self.vocab_set:
+                    self.remove_space(token_idx)
+                    token_idx += 1
+                else:
+                    token_idx = self.make_ocr_typo(token_idx)
+            else:
+                self._error_tokens.append(tokens[token_idx])
+                self._correct_tokens.append([tokens[token_idx]])
+                token_idx += 1
+        self.make_sparse()
+
+        self.make_dense()
+
+        self.reset_space_after_punctuation()
+
+        self.pad_to_length_3() 
+
+        return self._error_tokens, self._correct_tokens
+
+
     def run(self, tokens):
         self._tokens = tokens
         self._error_tokens = []
@@ -223,9 +296,6 @@ class CorrectionDatasetGenerator:
                 self._error_tokens.append(tokens[token_idx])
                 self._correct_tokens.append([tokens[token_idx]])
                 token_idx += 1
-
-
-
         self.make_sparse()
 
         self.make_dense()
@@ -277,8 +347,14 @@ class CorrectionDatasetGenerator:
         text = "".join([detokenize_char(self.tokenizer, token) for triple in corrected_tokens for token in triple if token != "[PAD]"])
         return text
 
-    def translate_old_hun(self, corrected_tokens):
-        return(corrected_tokens)
+    # def translate_old_hun(self, text):
+    #     rules = (
+    #         lambda content: self.pat_sz.sub("fz", content),
+    #         lambda content: self.pat_ssz.sub("fzfz", content),
+    #     )
+    #     for rule in rules:
+    #         text = rule(text)
+    #     return text
 
 
     def generate_dataset(self, dataset_dir, thread, seed_input):
@@ -309,7 +385,7 @@ class CorrectionDatasetGenerator:
                             tokens = self.tokenizer.tokenize(doc) # tokenize the textblocks between empty lines
                             if not tokens:
                                 continue
-                            all_modified_tokens, all_corrected_tokens = self.run(tokens)
+                            all_modified_tokens, all_corrected_tokens = self.run_old(tokens)
                             input_len = len(all_modified_tokens)
                             for start_index in range(0, input_len, self.seq_length - 2):
                                 modified_tokens = all_modified_tokens[start_index:start_index + self.seq_length - 2]
@@ -319,7 +395,7 @@ class CorrectionDatasetGenerator:
                                 with open("/home/mcsilla/machine_learning/gitrepos/err-corr/test_output.txt", "a") as f:
                                     standard_out = sys.stdout
                                     sys.stdout = f
-                                    print(self.restore_text_from_corrected_tokens(corrected_tokens))
+                                    print("".join([detokenize_char(self.tokenizer, token) for token in modified_tokens]))
                                     # print(inputs["input_ids"], "\n", inputs["attention_mask"], "\n", inputs["token_type_ids"], "\n\n",\
                                     # labels["label_0"], "\n", labels["label_1"], "\n", labels["label_2"], "\n\n")
                                     sys.stdout = standard_out
