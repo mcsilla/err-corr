@@ -52,27 +52,27 @@ def main():
             feature['output1'] = int64feature(outputs[0])
             feature['output2'] = int64feature(outputs[1])
             feature['output3'] = int64feature(outputs[2])
-            example = tf.train.Example(features=tf.train.Features(feature=feature))
-            example_cache.append(example)
+    #         example = tf.train.Example(features=tf.train.Features(feature=feature))
+    #         example_cache.append(example)
 
-            if not (inst_idx % 10000):
-                logging.info(f"*** repeat: {repeat} total_instances: {inst_idx} time: {time.time() - start_time}s ***")
+    #         if not (inst_idx % 10000):
+    #             logging.info(f"*** repeat: {repeat} total_instances: {inst_idx} time: {time.time() - start_time}s ***")
 
-            if len(example_cache) >= 100000:
-                write_examples_to_tfrecord(example_cache, writer)
-                example_cache = []
+    #         if len(example_cache) >= 100000:
+    #             write_examples_to_tfrecord(example_cache, writer)
+    #             example_cache = []
 
-            if inst_idx < 20:
-                logging.info("*** Example ***")
-                logging.info("text_with_errors: " + str(printable_format(character_tokenizer, inputs[0])))
-                # logging.info(f"attention_mask: {inputs[1]}")
-                # logging.info(f"token_type_ids: {inputs[2]}")
-                logging.info("text_corrected1: " + str(printable_format(character_tokenizer, outputs[0])))
-                # logging.info("text_corrected2: " + str(printable_format(character_tokenizer, outputs[1])))
-                # logging.info("text_corrected3: " + str(printable_format(character_tokenizer, outputs[2])))
-        write_examples_to_tfrecord(example_cache, writer)
+    #         if inst_idx < 20:
+    #             logging.info("*** Example ***")
+    #             logging.info("text_with_errors: " + str(printable_format(character_tokenizer, inputs[0])))
+    #             # logging.info(f"attention_mask: {inputs[1]}")
+    #             # logging.info(f"token_type_ids: {inputs[2]}")
+    #             logging.info("text_corrected1: " + str(printable_format(character_tokenizer, outputs[0])))
+    #             # logging.info("text_corrected2: " + str(printable_format(character_tokenizer, outputs[1])))
+    #             # logging.info("text_corrected3: " + str(printable_format(character_tokenizer, outputs[2])))
+    #     write_examples_to_tfrecord(example_cache, writer)
 
-    writer.close()
-    runtime = time.time() - start_time
-    logging.info(f"*** {inst_idx} files wrote to file in {runtime} seconds ***")
+    # writer.close()
+    # runtime = time.time() - start_time
+    # logging.info(f"*** {inst_idx} files wrote to file in {runtime} seconds ***")
 

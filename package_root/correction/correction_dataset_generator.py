@@ -178,8 +178,11 @@ class CorrectionDatasetGenerator:
                         if len(self._error_tokens[token_idx]) == 1 and "##" + self._error_tokens[token_idx] in self.vocab_set:
                             self._error_tokens[token_idx] = "##" + self._error_tokens[token_idx]
 
-    def make_old(self):
+    def make_old(self, token_idx):
+        # ha a hibagenerálás előtt csináljuk, akkor üres az error és correct tokens tömb
         pass
+
+
 
     def reset_space_after_punctuation(self):
         for token_idx in range(1, len(self._error_tokens)):
@@ -270,11 +273,19 @@ class CorrectionDatasetGenerator:
             "label_2": input_ids[2]
         }
 
+    def restore_text_from_corrected_tokens(self, corrected_tokens):
+        text = "".join([detokenize_char(self.tokenizer, token) for triple in corrected_tokens for token in triple if token != "[PAD]"])
+        return text
+
+    def translate_old_hun(self, corrected_tokens):
+        return(corrected_tokens)
+
 
     def generate_dataset(self, dataset_dir, thread, seed_input):
-        NUM_OF_THREADS = 16
-        input_files = sorted(tf.io.gfile.glob(dataset_dir + "/*/wiki_*"))
-        #random.seed(seed_input)
+        NUM_OF_THREADS = 1
+        input_files = sorted(tf.io.gfile.glob(dataset_dir + "/AA/wiki_00_test"))
+        # input_files = sorted(tf.io.gfile.glob(dataset_dir + "/*/wiki_*"))
+        random.seed(42)
         #random.shuffle(input_files)
         # input_files = tf.io.gfile.glob(dataset_dir + "/*")
         thread_input_length = len(input_files) // NUM_OF_THREADS
@@ -283,7 +294,7 @@ class CorrectionDatasetGenerator:
         thread_start = (thread - 1) * thread_input_length
         thread_input_files = input_files[thread_start:thread_start + thread_input_length]
         # print(thread_input_files)
-        # open("/home/mcsilla/machine_learning/gitrepos/err-corr/test_output.txt", 'w').close()
+        open("/home/mcsilla/machine_learning/gitrepos/err-corr/test_output.txt", 'w').close()
         for input_file in tqdm.tqdm(thread_input_files):
             with tf.io.gfile.GFile(input_file, mode='r') as inf:
                 document_lines = []
@@ -293,6 +304,8 @@ class CorrectionDatasetGenerator:
                         document_upper = document.upper()
                         document_lines = []
                         for doc in (document, document_upper):
+                            # doc2 = make_old(doc)
+                            # tokens2 = self.tokenizer.tokenize(doc2)
                             tokens = self.tokenizer.tokenize(doc) # tokenize the textblocks between empty lines
                             if not tokens:
                                 continue
@@ -303,12 +316,13 @@ class CorrectionDatasetGenerator:
                                 corrected_tokens = all_corrected_tokens[start_index:start_index + self.seq_length - 2]
                                 inputs = self.create_input(modified_tokens)
                                 labels = self.create_label(corrected_tokens)
-                                # with open("/home/mcsilla/machine_learning/gitrepos/err-corr/test_output.txt", "a") as f:
-                                #     standard_out = sys.stdout
-                                #     sys.stdout = f
-                                #     print(inputs["input_ids"], "\n", inputs["attention_mask"], "\n", inputs["token_type_ids"], "\n\n",\
-                                #     labels["label_0"], "\n", labels["label_1"], "\n", labels["label_2"], "\n\n")
-                                #     sys.stdout = standard_out
+                                with open("/home/mcsilla/machine_learning/gitrepos/err-corr/test_output.txt", "a") as f:
+                                    standard_out = sys.stdout
+                                    sys.stdout = f
+                                    print(self.restore_text_from_corrected_tokens(corrected_tokens))
+                                    # print(inputs["input_ids"], "\n", inputs["attention_mask"], "\n", inputs["token_type_ids"], "\n\n",\
+                                    # labels["label_0"], "\n", labels["label_1"], "\n", labels["label_2"], "\n\n")
+                                    sys.stdout = standard_out
                                 yield (inputs["input_ids"], inputs["attention_mask"], inputs["token_type_ids"]), \
                                     (labels["label_0"], labels["label_1"], labels["label_2"])
                     else:
