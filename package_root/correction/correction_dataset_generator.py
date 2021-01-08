@@ -53,9 +53,31 @@ class ErrorTable:
             correct_token_triples.append([repl_from])
         return correct_token_triples
 
+    
+    def correct_tokenizer(self, tokenized_chars):
+        corrected_chars = []
+        i = 0
+        # az "[" csak a "[PAD]"-nál szerepelhet az ocr_errors.txt-ben!
+        last_pad = False
+        while i < len(tokenized_chars):
+            next_char = tokenized_chars[i]
+            if next_char == "[":
+                corrected_chars.append("[PAD]")
+                i += 5
+                last_pad = True
+            elif last_pad == True:
+                corrected_chars.append("##" + next_char)
+                last_pad = False
+                i += 1
+            else:
+                corrected_chars.append(next_char)
+                i += 1
+
+        return corrected_chars
+
     def add_to_error_table(self, chars1, chars2, error_table):
-        tokenized_chars1 = tuple(self.tokenizer.tokenize(chars1))
-        tokenized_chars2 = tuple(self.tokenizer.tokenize(chars2))
+        tokenized_chars1 = tuple(self.correct_tokenizer(self.tokenizer.tokenize(chars1)))
+        tokenized_chars2 = tuple(self.correct_tokenizer(self.tokenizer.tokenize(chars2)))
         if "[UNK]" in tokenized_chars2 or "[UNK]" in tokenized_chars1:
             return
         error_table[tokenized_chars1].append(tokenized_chars2)
@@ -63,6 +85,17 @@ class ErrorTable:
             tokenized_chars1_hash = tuple(["##" + tokenized_chars1[0]] + list(tokenized_chars1[1:]))
             tokenized_chars2_hash = tuple(["##" + tokenized_chars2[0]] + list(tokenized_chars2[1:]))
             error_table[tokenized_chars1_hash].append(tokenized_chars2_hash)
+
+    # def add_to_error_table(self, chars1, chars2, error_table):
+    #     tokenized_chars1 = tuple(self.tokenizer.tokenize(chars1))
+    #     tokenized_chars2 = tuple(self.tokenizer.tokenize(chars2))
+    #     if "[UNK]" in tokenized_chars2 or "[UNK]" in tokenized_chars1:
+    #         return
+    #     error_table[tokenized_chars1].append(tokenized_chars2)
+    #     if "##" + tokenized_chars1[0] in self.vocab_set and "##" + tokenized_chars2[0] in self.vocab_set:
+    #         tokenized_chars1_hash = tuple(["##" + tokenized_chars1[0]] + list(tokenized_chars1[1:]))
+    #         tokenized_chars2_hash = tuple(["##" + tokenized_chars2[0]] + list(tokenized_chars2[1:]))
+    #         error_table[tokenized_chars1_hash].append(tokenized_chars2_hash)
 
     # def load_table_from_file(self, file_object):
     #     csv_reader = csv.reader(file_object, delimiter='\t', quotechar=None)
@@ -89,12 +122,29 @@ class ErrorTable:
                     if chars1 == chars2:
                         continue
                     self.add_to_error_table(chars1, chars2, error_table)
+
+        for chars1, chars2 in error_rows_ordered:
+            self.add_to_error_table(chars1, chars2, error_table)
+
         self.error_table = error_table
 
-        # for chars1, chars2 in transform_table_ordered:
-        #     self.add_to_error_table(chars1, chars2, error_table, correction_table)
+    def get_error2(self, tokens_list):
+        error_table_dict = dict(self.error_table)
+        modified_error_table = {}
+        for key, value in error_table_dict.items():
+            new_key = tuple(c for c in key if c != "[PAD]")
+            # if key != new_key:
+            #     print("key: ", key)
+            #     print("new_key: ", new_key)
+            #     print("value: ", value)
+            #     print("=" * 50)
 
-        # return error_table, correction_table
+            modified_error_table[new_key] = (key, value)
+
+        key = tuple(tokens_list)
+        if key in modified_error_table:
+            return modified_error_table[key][0], random.choice(modified_error_table[key][1])
+        return None
 
     
     def get_error(self, tokens_list):
@@ -188,6 +238,23 @@ class CorrectionDatasetGenerator:
             self._correct_tokens.append([self._tokens[token_idx]])
             return token_idx + 1
 
+    def make_ocr_typo2(self, token_idx):
+        in_table = []
+        for i in range(3):
+            if self.corr_gen.get_error(self._tokens[token_idx:token_idx + i + 1]):
+                in_table.append(i)
+        if in_table:
+            join_tokens = random.choice(in_table)
+            slice_correct_tokens = self._tokens[token_idx:token_idx + join_tokens + 1]
+            real_correct_tokens, slice_error_tokens = self.corr_gen.get_error2(slice_correct_tokens)
+            self._correct_tokens.extend(self.corr_gen.create_correction(real_correct_tokens, slice_error_tokens))
+            self._error_tokens.extend(slice_error_tokens)
+            return token_idx + join_tokens + 1
+        else:
+            self._error_tokens.append(random.choice(self.vocab))
+            self._correct_tokens.append([self._tokens[token_idx]])
+            return token_idx + 1
+
     def make_sparse(self):
         for sequence_start in range(0, len(self._error_tokens), self.seq_length - 2):
             if random.random() < self.sparse_frequency:
@@ -233,6 +300,7 @@ class CorrectionDatasetGenerator:
         self._old_tokens = []
         self._correction_to_old_tokens = []
         token_idx = 0
+        print(self.corr_gen.correct_tokenizer(self.tokenizer.tokenize("T[PAD][PAD]TY")))
         while token_idx < len(self._tokens):
             # make old
             if "".join(tokens[token_idx:token_idx + 3]) == "##s##s##z":
@@ -258,7 +326,7 @@ class CorrectionDatasetGenerator:
             if  tokens[token_idx] == "a" and len(tokens[token_idx + 1]) < 3:
                 self._old_tokens += ["a", "'"]
                 self._correction_to_old_tokens += [["a"], [self.tokenizer.pad_token]]
-                token_idx += 2
+                token_idx += 1
             else:
                 self._old_tokens.append(tokens[token_idx])
                 self._correction_to_old_tokens.append([tokens[token_idx]])
@@ -301,7 +369,25 @@ class CorrectionDatasetGenerator:
                     token_idx += 1
                 else:
                     # ocr typo
-                    token_idx += 1
+                    in_table = []
+                    for i in range(3):
+                        if self.corr_gen.get_error(self._old_tokens[token_idx:token_idx + i + 1]):
+                            in_table.append(i)
+                    if in_table:
+                        join_tokens = random.choice(in_table)
+                        slice_old_tokens = self._old_tokens[token_idx:token_idx + join_tokens + 1]
+                        slice_correct_tokens = [token for subarray in self._correction_to_old_tokens[token_idx:token_idx + join_tokens + 1] for token in subarray]
+                        real_correct_tokens, slice_error_tokens = self.corr_gen.get_error2(slice_old_tokens)
+                        if slice_old_tokens == slice_correct_tokens:
+                            self._correct_tokens.extend(self.corr_gen.create_correction(real_correct_tokens, slice_error_tokens))
+                        else:
+                            self._correct_tokens.extend(self.corr_gen.create_correction(slice_correct_tokens, slice_error_tokens))
+                        self._error_tokens.extend(slice_error_tokens)
+                        token_idx += join_tokens + 1
+                    else:
+                        self._error_tokens.append(random.choice(self.vocab))
+                        self._correct_tokens.append([self._old_tokens[token_idx]])
+                        token_idx += 1
                     
             else:
                 self._error_tokens.append(self._old_tokens[token_idx])
@@ -343,7 +429,7 @@ class CorrectionDatasetGenerator:
                     self.remove_space(token_idx)
                     token_idx += 1
                 else:
-                    token_idx = self.make_ocr_typo(token_idx)
+                    token_idx = self.make_ocr_typo2(token_idx)
             else:
                 self._error_tokens.append(tokens[token_idx])
                 self._correct_tokens.append([tokens[token_idx]])
@@ -447,7 +533,10 @@ class CorrectionDatasetGenerator:
                                 with open("/home/mcsilla/machine_learning/gitrepos/err-corr/test_output.txt", "a") as f:
                                     standard_out = sys.stdout
                                     sys.stdout = f
+                                    # print(self.corr_gen.error_table)
                                     print("".join([detokenize_char(self.tokenizer, token) for token in modified_tokens]))
+                                    print(self.restore_text_from_corrected_tokens(corrected_tokens))
+                                    print("=" * 100)
                                     # print(inputs["input_ids"], "\n", inputs["attention_mask"], "\n", inputs["token_type_ids"], "\n\n",\
                                     # labels["label_0"], "\n", labels["label_1"], "\n", labels["label_2"], "\n\n")
                                     sys.stdout = standard_out
