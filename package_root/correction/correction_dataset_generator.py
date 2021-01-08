@@ -169,13 +169,35 @@ class MakeTextOld:
         csv_reader = csv.reader(file_object, delimiter='\t', quotechar=None)
         rows = list(csv_reader)
         rows_anywhere = [row[1:] for row in rows if row[0] == "0"]
-        rows_end_only = [row[1:] for row in rows if row[0] == "1"]
+        rows_middle_or_end = [row[1:] for row in rows if row[0] == "1"]
+        rows_beginning = [row[1:] for row in rows if row[0] == "2"]
+
         change_table = defaultdict(list)
         tok = ManipulateTokens(self.tokenizer)
         for row in rows_anywhere:
             for original_tokens, old_tokens, correction_tokens in zip(*[tok.tokenize_all_versions(row[i]) for i in range(3)]):
                  change_table[tuple(original_tokens)] = (old_tokens, correction_tokens)
+        for row in rows_middle_or_end:
+            for original_tokens, old_tokens, correction_tokens in zip(*[tok.tokenize_all_versions_with_starting_hash(row[i]) for i in range(3)]):
+                 change_table[tuple(original_tokens)] = (old_tokens, correction_tokens)
+        for row in rows_beginning:
+            for original_tokens, old_tokens, correction_tokens in zip(*[tok.tokenize_all_versions_without_starting_hash(row[i]) for i in range(3)]):
+                 change_table[tuple(original_tokens)] = (old_tokens, correction_tokens)
         self.change_table = change_table
+
+    def get_old_version(self, tokens_list):
+        change_table_dict = dict(self.change_table)
+        key = tuple(tokens_list)
+        if key in change_table_dict:
+            return change_table_dict[key][0]
+        return None
+
+    def get_corrected_version(self, tokens_list):
+        change_table_dict = dict(self.change_table)
+        key = tuple(tokens_list)
+        if key in change_table_dict:
+            return change_table_dict[key][1]
+        return None     
 
 class CorrectionDatasetGenerator:
     error_frequency = 0.15
@@ -187,7 +209,7 @@ class CorrectionDatasetGenerator:
     pat_sz = re.compile("(?<!s)sz")
     pat_ssz = re.compile("ssz")
 
-    def __init__(self, _tokenizer, _ocr_errors_generator, _seq_length):
+    def __init__(self, _tokenizer, _ocr_errors_generator, _seq_length, _old_text_generator):
         self.tokenizer = _tokenizer
         non_vocab_tokens = (
             self.tokenizer.cls_token,
@@ -198,7 +220,7 @@ class CorrectionDatasetGenerator:
         self.vocab = sorted(self.vocab_set)
         self.seq_length = _seq_length
         self.corr_gen = _ocr_errors_generator
-
+        self.old_gen = _old_text_generator
         self._tokens = None
         self._old_tokens = None
         self._correction_to_old_tokens = None
@@ -321,52 +343,45 @@ class CorrectionDatasetGenerator:
         self._correct_tokens = []
         self._old_tokens = []
         self._correction_to_old_tokens = []
-        old_text_generator = MakeTextOld(self.tokenizer)
         with open("old_table.txt", encoding="utf-8") as f:
-            old_text_generator.load_change_table_from_file(f)
-        print(old_text_generator.change_table)
+            self.old_gen.load_change_table_from_file(f)
+        # print(old_text_generator.change_table)
         token_idx = 0
         # print(self.corr_gen.correct_tokenizer(self.tokenizer.tokenize("T[PAD][PAD]TY")))
         while token_idx < len(self._tokens):
             # make old
-            if "".join(self._tokens[token_idx:token_idx + 3]) == "##s##s##z":
-                self._old_tokens += ["##f", "##z", "##f", "##z"]
-                self._correction_to_old_tokens += [["##s"], ["##s"], ["##z"], [self.tokenizer.pad_token]]
-                token_idx += 3
-            if "".join(self._tokens[token_idx:token_idx + 3]) == "s##s##z":
-                self._old_tokens += ["f", "##z", "##f", "##z"]
-                self._correction_to_old_tokens += [["s"], ["##s"], ["##z"], [self.tokenizer.pad_token]]
-                token_idx += 3
-            if "".join(self._tokens[token_idx:token_idx + 2]) == "##s##z":
-                self._old_tokens += ["##f", "##z"]
-                self._correction_to_old_tokens += [["##s"], ["##z"]]
-                token_idx += 2
-            if "".join(self._tokens[token_idx:token_idx + 2]) == "s##z":
-                self._old_tokens += ["f", "##z"]
-                self._correction_to_old_tokens += [["s"], ["##z"]]
-                token_idx += 2
-            if "".join(self._tokens[token_idx:token_idx + 2]) == "##n##b":
-                self._old_tokens += ["##m", "##b"]
-                self._correction_to_old_tokens += [["##n"], ["##b"]]
-                token_idx += 2
-            if  self._tokens[token_idx] == "a" and len(tokens[token_idx + 1]) < 3:
-                self._old_tokens += ["a", "'"]
-                self._correction_to_old_tokens += [["a"], [self.tokenizer.pad_token]]
+            in_table = []
+            for i in reversed(range(4)):
+                if self.old_gen.get_old_version(self._tokens[token_idx:token_idx + i + 1]):
+                    in_table.append(i)
+                    break
+            if self._tokens[token_idx].lower() == "a" and len(self._tokens[token_idx + 1]) < 3:
+                self._old_tokens += self.old_gen.get_old_version([self._tokens[token_idx]])
+                self._correction_to_old_tokens += self.old_gen.get_corrected_version([self._tokens[token_idx]])
                 token_idx += 1
+            elif "".join(self._tokens[token_idx:token_idx + 2]).lower() == "é##s" and len(self._tokens[token_idx + 2]) < 3:
+                self._old_tokens += self.old_gen.get_old_version(self._tokens[token_idx:token_idx + 2])
+                self._correction_to_old_tokens += self.old_gen.get_corrected_version(self._tokens[token_idx:token_idx + 2])
+                token_idx += 2
+            elif in_table:
+                i = in_table[0]
+                self._old_tokens += self.old_gen.get_old_version(self._tokens[token_idx:token_idx + i + 1])
+                self._correction_to_old_tokens += self.old_gen.get_corrected_version(self._tokens[token_idx:token_idx + i + 1])
+                token_idx += i + 1
             else:
                 self._old_tokens.append(self._tokens[token_idx])
-                self._correction_to_old_tokens.append([self._tokens[token_idx]])
+                self._correction_to_old_tokens.append(self._tokens[token_idx])
                 token_idx += 1
         token_idx = 0
         while token_idx < len(self._old_tokens):
             if random.random() < self.error_frequency: # random.random() in [0, 1)
                 if random.random() < 0.1:
                     self._error_tokens.append(random.choice(self.vocab))
-                    self._correct_tokens.append(self._correction_to_old_tokens[token_idx])
+                    self._correct_tokens.append([self._correction_to_old_tokens[token_idx]])
                     token_idx += 1    
                 # len(correction_to_old_tokens[i]) has to be 1
                 elif random.random() < 0.05 and self._correct_tokens and len(self._correct_tokens[-1]) < 3:
-                    self._correct_tokens[-1] += self._correction_to_old_tokens[token_idx]
+                    self._correct_tokens[-1].append(self._correction_to_old_tokens[token_idx])
                     token_idx += 1
                 elif random.random() < 0.05:
                     if random.random() < 0.2 or token_idx >= len(self._old_tokens) - 1:
@@ -382,16 +397,16 @@ class CorrectionDatasetGenerator:
                         if next_token.startswith("##") and random.random() < 0.8:
                             next_token = next_token[2:]
                         self._error_tokens.append(next_token)
-                        self._correct_tokens.append(self._correction_to_old_tokens[token_idx])
+                        self._correct_tokens.append([self._correction_to_old_tokens[token_idx]])
                         token_idx += 1
                 elif random.random() < 0.1 and "##" + self._old_tokens[token_idx] in self.vocab_set:
                     self._error_tokens.append("##" + self._old_tokens[token_idx])
-                    self._correct_tokens.append(self._correction_to_old_tokens[token_idx])
+                    self._correct_tokens.append([self._correction_to_old_tokens[token_idx]])
                     token_idx += 1
                 elif random.random() < 0.1 and self._old_tokens[token_idx].startswith("##") and \
                         self._old_tokens[token_idx][2:] in self.vocab_set:
                     self._error_tokens.append(self._old_tokens[token_idx][2:])
-                    self._correct_tokens.append(self._correction_to_old_tokens[token_idx])
+                    self._correct_tokens.append([self._correction_to_old_tokens[token_idx]])
                     token_idx += 1
                 else:
                     # ocr typo
@@ -402,7 +417,7 @@ class CorrectionDatasetGenerator:
                     if in_table:
                         join_tokens = random.choice(in_table)
                         slice_old_tokens = self._old_tokens[token_idx:token_idx + join_tokens + 1]
-                        slice_correct_tokens = [token for subarray in self._correction_to_old_tokens[token_idx:token_idx + join_tokens + 1] for token in subarray]
+                        slice_correct_tokens = [token for token in self._correction_to_old_tokens[token_idx:token_idx + join_tokens + 1]]
                         real_correct_tokens, slice_error_tokens = self.corr_gen.get_error2(slice_old_tokens)
                         if slice_old_tokens == slice_correct_tokens:
                             self._correct_tokens.extend(self.corr_gen.create_correction(real_correct_tokens, slice_error_tokens))
@@ -417,7 +432,7 @@ class CorrectionDatasetGenerator:
                     
             else:
                 self._error_tokens.append(self._old_tokens[token_idx])
-                self._correct_tokens.append(self._correction_to_old_tokens[token_idx])
+                self._correct_tokens.append([self._correction_to_old_tokens[token_idx]])
                 token_idx += 1
 
         self.make_sparse()
@@ -560,10 +575,10 @@ class CorrectionDatasetGenerator:
                                     standard_out = sys.stdout
                                     sys.stdout = f
                                     # print(self.corr_gen.error_table)
-                                    # print("".join([detokenize_char(self.tokenizer, token) for token in modified_tokens]))
-                                    # print(self.restore_text_from_corrected_tokens(corrected_tokens))
-                                    print(inputs["input_ids"], "\n", inputs["attention_mask"], "\n", inputs["token_type_ids"], "\n\n",\
-                                    labels["label_0"], "\n", labels["label_1"], "\n", labels["label_2"], "\n\n")
+                                    print("".join([detokenize_char(self.tokenizer, token) for token in modified_tokens]))
+                                    print(self.restore_text_from_corrected_tokens(corrected_tokens))
+                                    # print(inputs["input_ids"], "\n", inputs["attention_mask"], "\n", inputs["token_type_ids"], "\n\n",\
+                                    # labels["label_0"], "\n", labels["label_1"], "\n", labels["label_2"], "\n\n")
                                     print("=" * 100)
                                     sys.stdout = standard_out
                                 yield (inputs["input_ids"], inputs["attention_mask"], inputs["token_type_ids"]), \

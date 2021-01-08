@@ -10,7 +10,7 @@ import tensorflow as tf
 from transformers import BertTokenizerFast
 
 import correction.correction_dataset_generator
-from correction.correction_dataset_generator import ErrorTable, CorrectionDatasetGenerator, write_examples_to_tfrecord, int64feature, printable_format
+from correction.correction_dataset_generator import MakeTextOld, ErrorTable, CorrectionDatasetGenerator, write_examples_to_tfrecord, int64feature, printable_format
 
 def main():
     parser = argparse.ArgumentParser() # creating an ArgumentParser object
@@ -30,9 +30,10 @@ def main():
 
     character_tokenizer = BertTokenizerFast(Path(files_paths["vocab_file"]), do_lower_case=False) 
     ocr_errors_generator = ErrorTable(character_tokenizer)
+    old_text_generator = MakeTextOld(character_tokenizer)
     with open(Path(files_paths["ocr_errors"]), encoding="utf-8") as f:
         ocr_errors_generator.load_table_from_file(f)
-    dataset_generator = CorrectionDatasetGenerator(character_tokenizer, ocr_errors_generator, record_params["sequence_length"])
+    dataset_generator = CorrectionDatasetGenerator(character_tokenizer, ocr_errors_generator, record_params["sequence_length"], old_text_generator)
     output_dir = Path(files_paths["output_file_root"])
     tf.io.gfile.makedirs(str(output_dir))
     writer = tf.io.TFRecordWriter(str(output_dir / f"tf_record_{args.output}"), options="GZIP")
