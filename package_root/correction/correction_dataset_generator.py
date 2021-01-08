@@ -13,6 +13,8 @@ import tqdm
 import numpy as np
 import tensorflow as tf
 import re
+from useful import ManipulateTokens
+
 
 from official.nlp.bert.tokenization import _is_punctuation
 
@@ -154,6 +156,26 @@ class ErrorTable:
             return random.choice(error_table_dict[key])
         return None
 
+
+class MakeTextOld:
+    def __init__(self, _tokenizer):
+        self.tokenizer = _tokenizer
+        self.tokens = None
+        self.old_tokens = None
+        self.correction_to_old_tokens = None
+        self.change_table = None
+
+    def load_change_table_from_file(self, file_object):
+        csv_reader = csv.reader(file_object, delimiter='\t', quotechar=None)
+        rows = list(csv_reader)
+        rows_anywhere = [row[1:] for row in rows if row[0] == "0"]
+        rows_end_only = [row[1:] for row in rows if row[0] == "1"]
+        change_table = defaultdict(list)
+        tok = ManipulateTokens(self.tokenizer)
+        for row in rows_anywhere:
+            for original_tokens, old_tokens, correction_tokens in zip(*[tok.tokenize_all_versions(row[i]) for i in range(3)]):
+                 change_table[tuple(original_tokens)] = (old_tokens, correction_tokens)
+        self.change_table = change_table
 
 class CorrectionDatasetGenerator:
     error_frequency = 0.15
@@ -299,37 +321,41 @@ class CorrectionDatasetGenerator:
         self._correct_tokens = []
         self._old_tokens = []
         self._correction_to_old_tokens = []
+        old_text_generator = MakeTextOld(self.tokenizer)
+        with open("old_table.txt", encoding="utf-8") as f:
+            old_text_generator.load_change_table_from_file(f)
+        print(old_text_generator.change_table)
         token_idx = 0
-        print(self.corr_gen.correct_tokenizer(self.tokenizer.tokenize("T[PAD][PAD]TY")))
+        # print(self.corr_gen.correct_tokenizer(self.tokenizer.tokenize("T[PAD][PAD]TY")))
         while token_idx < len(self._tokens):
             # make old
-            if "".join(tokens[token_idx:token_idx + 3]) == "##s##s##z":
+            if "".join(self._tokens[token_idx:token_idx + 3]) == "##s##s##z":
                 self._old_tokens += ["##f", "##z", "##f", "##z"]
                 self._correction_to_old_tokens += [["##s"], ["##s"], ["##z"], [self.tokenizer.pad_token]]
                 token_idx += 3
-            if "".join(tokens[token_idx:token_idx + 3]) == "s##s##z":
+            if "".join(self._tokens[token_idx:token_idx + 3]) == "s##s##z":
                 self._old_tokens += ["f", "##z", "##f", "##z"]
                 self._correction_to_old_tokens += [["s"], ["##s"], ["##z"], [self.tokenizer.pad_token]]
                 token_idx += 3
-            if "".join(tokens[token_idx:token_idx + 2]) == "##s##z":
+            if "".join(self._tokens[token_idx:token_idx + 2]) == "##s##z":
                 self._old_tokens += ["##f", "##z"]
                 self._correction_to_old_tokens += [["##s"], ["##z"]]
                 token_idx += 2
-            if "".join(tokens[token_idx:token_idx + 2]) == "s##z":
+            if "".join(self._tokens[token_idx:token_idx + 2]) == "s##z":
                 self._old_tokens += ["f", "##z"]
                 self._correction_to_old_tokens += [["s"], ["##z"]]
                 token_idx += 2
-            if "".join(tokens[token_idx:token_idx + 2]) == "##n##b":
+            if "".join(self._tokens[token_idx:token_idx + 2]) == "##n##b":
                 self._old_tokens += ["##m", "##b"]
                 self._correction_to_old_tokens += [["##n"], ["##b"]]
                 token_idx += 2
-            if  tokens[token_idx] == "a" and len(tokens[token_idx + 1]) < 3:
+            if  self._tokens[token_idx] == "a" and len(tokens[token_idx + 1]) < 3:
                 self._old_tokens += ["a", "'"]
                 self._correction_to_old_tokens += [["a"], [self.tokenizer.pad_token]]
                 token_idx += 1
             else:
-                self._old_tokens.append(tokens[token_idx])
-                self._correction_to_old_tokens.append([tokens[token_idx]])
+                self._old_tokens.append(self._tokens[token_idx])
+                self._correction_to_old_tokens.append([self._tokens[token_idx]])
                 token_idx += 1
         token_idx = 0
         while token_idx < len(self._old_tokens):
@@ -431,8 +457,8 @@ class CorrectionDatasetGenerator:
                 else:
                     token_idx = self.make_ocr_typo2(token_idx)
             else:
-                self._error_tokens.append(tokens[token_idx])
-                self._correct_tokens.append([tokens[token_idx]])
+                self._error_tokens.append(self._tokens[token_idx])
+                self._correct_tokens.append([self._tokens[token_idx]])
                 token_idx += 1
         self.make_sparse()
 
@@ -534,11 +560,11 @@ class CorrectionDatasetGenerator:
                                     standard_out = sys.stdout
                                     sys.stdout = f
                                     # print(self.corr_gen.error_table)
-                                    print("".join([detokenize_char(self.tokenizer, token) for token in modified_tokens]))
-                                    print(self.restore_text_from_corrected_tokens(corrected_tokens))
+                                    # print("".join([detokenize_char(self.tokenizer, token) for token in modified_tokens]))
+                                    # print(self.restore_text_from_corrected_tokens(corrected_tokens))
+                                    print(inputs["input_ids"], "\n", inputs["attention_mask"], "\n", inputs["token_type_ids"], "\n\n",\
+                                    labels["label_0"], "\n", labels["label_1"], "\n", labels["label_2"], "\n\n")
                                     print("=" * 100)
-                                    # print(inputs["input_ids"], "\n", inputs["attention_mask"], "\n", inputs["token_type_ids"], "\n\n",\
-                                    # labels["label_0"], "\n", labels["label_1"], "\n", labels["label_2"], "\n\n")
                                     sys.stdout = standard_out
                                 yield (inputs["input_ids"], inputs["attention_mask"], inputs["token_type_ids"]), \
                                     (labels["label_0"], labels["label_1"], labels["label_2"])
