@@ -108,6 +108,8 @@ class CorrectionDatasetGenerator:
         self.corr_gen = _ocr_errors_generator
 
         self._tokens = None
+        self._old_tokens = None
+        self._correction_to_old_tokens = None
         self._error_tokens = None
         self._correct_tokens = None
 
@@ -208,54 +210,84 @@ class CorrectionDatasetGenerator:
         self._tokens = tokens
         self._error_tokens = []
         self._correct_tokens = []
+        self._old_tokens = []
+        self._correction_to_old_tokens = []
         token_idx = 0
         while token_idx < len(self._tokens):
+            # make old
             if "".join(tokens[token_idx:token_idx + 3]) == "##s##s##z":
-                self._error_tokens += ["##f", "##z", "##f", "##z"]
-                self._correct_tokens += [["##s"], ["##s"], ["##z"], [self.tokenizer.pad_token]]
+                self._old_tokens += ["##f", "##z", "##f", "##z"]
+                self._correction_to_old_tokens += [["##s"], ["##s"], ["##z"], [self.tokenizer.pad_token]]
                 token_idx += 3
             if "".join(tokens[token_idx:token_idx + 3]) == "s##s##z":
-                self._error_tokens += ["f", "##z", "##f", "##z"]
-                self._correct_tokens += [["s"], ["##s"], ["##z"], [self.tokenizer.pad_token]]
+                self._old_tokens += ["f", "##z", "##f", "##z"]
+                self._correction_to_old_tokens += [["s"], ["##s"], ["##z"], [self.tokenizer.pad_token]]
                 token_idx += 3
             if "".join(tokens[token_idx:token_idx + 2]) == "##s##z":
-                self._error_tokens += ["##f", "##z"]
-                self._correct_tokens += [["##s"], ["##z"]]
+                self._old_tokens += ["##f", "##z"]
+                self._correction_to_old_tokens += [["##s"], ["##z"]]
                 token_idx += 2
             if "".join(tokens[token_idx:token_idx + 2]) == "s##z":
-                self._error_tokens += ["f", "##z"]
-                self._correct_tokens += [["s"], ["##z"]]
+                self._old_tokens += ["f", "##z"]
+                self._correction_to_old_tokens += [["s"], ["##z"]]
                 token_idx += 2
             if "".join(tokens[token_idx:token_idx + 2]) == "##n##b":
-                self._error_tokens += ["##m", "##b"]
-                self._correct_tokens += [["##n"], ["##b"]]
+                self._old_tokens += ["##m", "##b"]
+                self._correction_to_old_tokens += [["##n"], ["##b"]]
                 token_idx += 2
             if  tokens[token_idx] == "a" and len(tokens[token_idx + 1]) < 3:
-                self._error_tokens += ["a", "'"]
-                self._correct_tokens += [["a"], [self.tokenizer.pad_token]]
-                token_idx += 2                
+                self._old_tokens += ["a", "'"]
+                self._correction_to_old_tokens += [["a"], [self.tokenizer.pad_token]]
+                token_idx += 2
+            else:
+                self._old_tokens.append(tokens[token_idx])
+                self._correction_to_old_tokens.append([tokens[token_idx]])
+                token_idx += 1
+        token_idx = 0
+        while token_idx < len(self._old_tokens):
             if random.random() < self.error_frequency: # random.random() in [0, 1)
                 if random.random() < 0.1:
-                    self.replace_with_random_token(token_idx)
+                    self._error_tokens.append(random.choice(self.vocab))
+                    self._correct_tokens.append(self._correction_to_old_tokens[token_idx])
                     token_idx += 1    
+                # len(correction_to_old_tokens[i]) has to be 1
                 elif random.random() < 0.05 and self._correct_tokens and len(self._correct_tokens[-1]) < 3:
-                    self.delete_token(token_idx)
+                    self._correct_tokens[-1] += self._correction_to_old_tokens[token_idx]
                     token_idx += 1
                 elif random.random() < 0.05:
-                    token_idx = self.add_extra_token(token_idx)
-                elif random.random() < 0.1 and "##" + self._tokens[token_idx] in self.vocab_set:
-                    self.add_space(token_idx)
+                    if random.random() < 0.2 or token_idx >= len(self._old_tokens) - 1:
+                        self._error_tokens.append(random.choice(self.vocab))
+                        self._correct_tokens.append([self.tokenizer.pad_token])
+                    else:
+                        extra_token = random.choice(self.common_extra_chars)
+                        if random.random() < 0.6:
+                            extra_token = random.choice(self.hyphens)
+                        self._error_tokens.append(extra_token)
+                        self._correct_tokens.append([self.tokenizer.pad_token])
+                        next_token = self._old_tokens[token_idx]
+                        if next_token.startswith("##") and random.random() < 0.8:
+                            next_token = next_token[2:]
+                        self._error_tokens.append(next_token)
+                        self._correct_tokens.append(self._correction_to_old_tokens[token_idx])
+                        token_idx += 1
+                elif random.random() < 0.1 and "##" + self._old_tokens[token_idx] in self.vocab_set:
+                    self._error_tokens.append("##" + self._old_tokens[token_idx])
+                    self._correct_tokens.append(self._correction_to_old_tokens[token_idx])
                     token_idx += 1
-                elif random.random() < 0.1 and self._tokens[token_idx].startswith("##") and \
-                        self._tokens[token_idx][2:] in self.vocab_set:
-                    self.remove_space(token_idx)
+                elif random.random() < 0.1 and self._old_tokens[token_idx].startswith("##") and \
+                        self._old_tokens[token_idx][2:] in self.vocab_set:
+                    self._error_tokens.append(self._old_tokens[token_idx][2:])
+                    self._correct_tokens.append(self._correction_to_old_tokens[token_idx])
                     token_idx += 1
                 else:
-                    token_idx = self.make_ocr_typo(token_idx)
+                    # ocr typo
+                    token_idx += 1
+                    
             else:
-                self._error_tokens.append(tokens[token_idx])
-                self._correct_tokens.append([tokens[token_idx]])
+                self._error_tokens.append(self._old_tokens[token_idx])
+                self._correct_tokens.append(self._correction_to_old_tokens[token_idx])
                 token_idx += 1
+
         self.make_sparse()
 
         self.make_dense()
