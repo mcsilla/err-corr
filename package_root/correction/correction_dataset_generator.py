@@ -64,17 +64,37 @@ class ErrorTable:
             tokenized_chars2_hash = tuple(["##" + tokenized_chars2[0]] + list(tokenized_chars2[1:]))
             error_table[tokenized_chars1_hash].append(tokenized_chars2_hash)
 
+    # def load_table_from_file(self, file_object):
+    #     csv_reader = csv.reader(file_object, delimiter='\t', quotechar=None)
+    #     error_rows = list(csv_reader)
+    #     error_table = defaultdict(list)
+    #     for possible_mistake in error_rows:
+    #         for chars1 in possible_mistake:
+    #             for chars2 in possible_mistake:
+    #                 if chars1 == chars2:
+    #                     continue
+    #                 self.add_to_error_table(chars1, chars2, error_table)
+    #     self.error_table = error_table
+
+    
     def load_table_from_file(self, file_object):
         csv_reader = csv.reader(file_object, delimiter='\t', quotechar=None)
-        error_rows = list(csv_reader)
+        rows = list(csv_reader)
+        error_rows_unordered = [row[1:] for row in rows if row[0] == "0"]
+        error_rows_ordered = [row[1:] for row in rows if row[0] == "1"]
         error_table = defaultdict(list)
-        for possible_mistake in error_rows:
+        for possible_mistake in error_rows_unordered:
             for chars1 in possible_mistake:
                 for chars2 in possible_mistake:
                     if chars1 == chars2:
                         continue
                     self.add_to_error_table(chars1, chars2, error_table)
         self.error_table = error_table
+
+        # for chars1, chars2 in transform_table_ordered:
+        #     self.add_to_error_table(chars1, chars2, error_table, correction_table)
+
+        # return error_table, correction_table
 
     
     def get_error(self, tokens_list):
