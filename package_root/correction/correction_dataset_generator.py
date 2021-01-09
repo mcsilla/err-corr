@@ -232,12 +232,10 @@ class CorrectionDatasetGenerator:
         self._error_tokens.append(random.choice(self.vocab))
         self._correct_tokens.append([self._tokens[token_idx]])
 
-
     def delete_token(self, token_idx):
         self._correct_tokens[-1].append(self._tokens[token_idx])
 
-
-    def add_extra_token(self, token_idx):
+    def add_extra_token(self, token_idx, old_tokens):
         if random.random() < 0.2 or token_idx >= len(self._tokens) - 1:
             self._error_tokens.append(random.choice(self.vocab))
             self._correct_tokens.append([self.tokenizer.pad_token])
@@ -248,7 +246,7 @@ class CorrectionDatasetGenerator:
                 extra_token = random.choice(self.hyphens)
             self._error_tokens.append(extra_token)
             self._correct_tokens.append([self.tokenizer.pad_token])
-            next_token = self._tokens[token_idx]
+            next_token = old_tokens[token_idx]
             if next_token.startswith("##") and random.random() < 0.8:
                 next_token = next_token[2:]
             self._error_tokens.append(next_token)
@@ -259,44 +257,32 @@ class CorrectionDatasetGenerator:
         self._error_tokens.append("##" + self._tokens[token_idx])
         self._correct_tokens.append([self._tokens[token_idx]])
 
-
     def remove_space(self, token_idx):
         self._error_tokens.append(self._tokens[token_idx][2:])
         self._correct_tokens.append([self._tokens[token_idx]])
 
-
-    def make_ocr_typo(self, token_idx):
+    def make_ocr_typo(self, token_idx, old_tokens, tokens):
         in_table = []
         for i in range(3):
-            if self.corr_gen.get_error(self._tokens[token_idx:token_idx + i + 1]):
+            if self.corr_gen.get_error(old_tokens[token_idx:token_idx + i + 1]):
                 in_table.append(i)
         if in_table:
             join_tokens = random.choice(in_table)
-            slice_correct_tokens = self._tokens[token_idx:token_idx + join_tokens + 1]
-            slice_error_tokens = self.corr_gen.get_error(slice_correct_tokens)
-            self._correct_tokens.extend(self.corr_gen.create_correction(slice_correct_tokens, slice_error_tokens))
+            # a régiesített tokenek szelete, ehhez keresünk a táblázatból typot
+            slice_old_tokens = old_tokens[token_idx:token_idx + join_tokens + 1]
+            # a korrekció majd ez lesz
+            slice_correct_tokens = tokens[token_idx:token_idx + join_tokens + 1]
+            # az old tokenekhez keresünk typot
+            real_correct_tokens, slice_error_tokens = self.corr_gen.get_error2(slice_old_tokens)
+            if slice_old_tokens == slice_correct_tokens:
+                self._correct_tokens.extend(self.corr_gen.create_correction(real_correct_tokens, slice_error_tokens))
+            else:
+                self._correct_tokens.extend(self.corr_gen.create_correction(slice_correct_tokens, slice_error_tokens))
             self._error_tokens.extend(slice_error_tokens)
             return token_idx + join_tokens + 1
         else:
             self._error_tokens.append(random.choice(self.vocab))
-            self._correct_tokens.append([self._tokens[token_idx]])
-            return token_idx + 1
-
-    def make_ocr_typo2(self, token_idx):
-        in_table = []
-        for i in range(3):
-            if self.corr_gen.get_error(self._tokens[token_idx:token_idx + i + 1]):
-                in_table.append(i)
-        if in_table:
-            join_tokens = random.choice(in_table)
-            slice_correct_tokens = self._tokens[token_idx:token_idx + join_tokens + 1]
-            real_correct_tokens, slice_error_tokens = self.corr_gen.get_error2(slice_correct_tokens)
-            self._correct_tokens.extend(self.corr_gen.create_correction(real_correct_tokens, slice_error_tokens))
-            self._error_tokens.extend(slice_error_tokens)
-            return token_idx + join_tokens + 1
-        else:
-            self._error_tokens.append(random.choice(self.vocab))
-            self._correct_tokens.append([self._tokens[token_idx]])
+            self._correct_tokens.append([old_tokens[token_idx]])
             return token_idx + 1
 
     def make_sparse(self):
@@ -320,12 +306,6 @@ class CorrectionDatasetGenerator:
                     for token_idx in range(dense_start, min(dense_start + dense_length, len(self._error_tokens))):
                         if len(self._error_tokens[token_idx]) == 1 and "##" + self._error_tokens[token_idx] in self.vocab_set:
                             self._error_tokens[token_idx] = "##" + self._error_tokens[token_idx]
-
-    def make_old(self, token_idx):
-        # ha a hibagenerálás előtt csináljuk, akkor üres az error és correct tokens tömb
-        pass
-
-
 
     def reset_space_after_punctuation(self):
         for token_idx in range(1, len(self._error_tokens)):
@@ -373,32 +353,17 @@ class CorrectionDatasetGenerator:
                 self._correction_to_old_tokens.append(self._tokens[token_idx])
                 token_idx += 1
         token_idx = 0
+        self._tokens = self._correction_to_old_tokens
         while token_idx < len(self._old_tokens):
             if random.random() < self.error_frequency: # random.random() in [0, 1)
                 if random.random() < 0.1:
-                    self._error_tokens.append(random.choice(self.vocab))
-                    self._correct_tokens.append([self._correction_to_old_tokens[token_idx]])
+                    self.replace_with_random_token(token_idx)
                     token_idx += 1    
-                # len(correction_to_old_tokens[i]) has to be 1
                 elif random.random() < 0.05 and self._correct_tokens and len(self._correct_tokens[-1]) < 3:
-                    self._correct_tokens[-1].append(self._correction_to_old_tokens[token_idx])
+                    self.delete_token(token_idx)
                     token_idx += 1
                 elif random.random() < 0.05:
-                    if random.random() < 0.2 or token_idx >= len(self._old_tokens) - 1:
-                        self._error_tokens.append(random.choice(self.vocab))
-                        self._correct_tokens.append([self.tokenizer.pad_token])
-                    else:
-                        extra_token = random.choice(self.common_extra_chars)
-                        if random.random() < 0.6:
-                            extra_token = random.choice(self.hyphens)
-                        self._error_tokens.append(extra_token)
-                        self._correct_tokens.append([self.tokenizer.pad_token])
-                        next_token = self._old_tokens[token_idx]
-                        if next_token.startswith("##") and random.random() < 0.8:
-                            next_token = next_token[2:]
-                        self._error_tokens.append(next_token)
-                        self._correct_tokens.append([self._correction_to_old_tokens[token_idx]])
-                        token_idx += 1
+                    token_idx = self.add_extra_token(token_idx, self._old_tokens)
                 elif random.random() < 0.1 and "##" + self._old_tokens[token_idx] in self.vocab_set:
                     self._error_tokens.append("##" + self._old_tokens[token_idx])
                     self._correct_tokens.append([self._correction_to_old_tokens[token_idx]])
@@ -409,49 +374,22 @@ class CorrectionDatasetGenerator:
                     self._correct_tokens.append([self._correction_to_old_tokens[token_idx]])
                     token_idx += 1
                 else:
-                    # ocr typo
-                    in_table = []
-                    for i in range(3):
-                        if self.corr_gen.get_error(self._old_tokens[token_idx:token_idx + i + 1]):
-                            in_table.append(i)
-                    if in_table:
-                        join_tokens = random.choice(in_table)
-                        slice_old_tokens = self._old_tokens[token_idx:token_idx + join_tokens + 1]
-                        slice_correct_tokens = [token for token in self._correction_to_old_tokens[token_idx:token_idx + join_tokens + 1]]
-                        real_correct_tokens, slice_error_tokens = self.corr_gen.get_error2(slice_old_tokens)
-                        if slice_old_tokens == slice_correct_tokens:
-                            self._correct_tokens.extend(self.corr_gen.create_correction(real_correct_tokens, slice_error_tokens))
-                        else:
-                            self._correct_tokens.extend(self.corr_gen.create_correction(slice_correct_tokens, slice_error_tokens))
-                        self._error_tokens.extend(slice_error_tokens)
-                        token_idx += join_tokens + 1
-                    else:
-                        self._error_tokens.append(random.choice(self.vocab))
-                        self._correct_tokens.append([self._old_tokens[token_idx]])
-                        token_idx += 1
-                    
+                    token_idx = self.make_ocr_typo(token_idx, self._old_tokens, self._tokens)
             else:
                 self._error_tokens.append(self._old_tokens[token_idx])
                 self._correct_tokens.append([self._correction_to_old_tokens[token_idx]])
                 token_idx += 1
-
         self.make_sparse()
-
         self.make_dense()
-
         self.reset_space_after_punctuation()
-
         self.pad_to_length_3() 
-
         return self._error_tokens, self._correct_tokens
-
 
     def run(self, tokens):
         self._tokens = tokens
         self._error_tokens = []
         self._correct_tokens = []
         token_idx = 0
-        # random.seed(42)
         while token_idx < len(self._tokens):
             if random.random() < self.error_frequency: # random.random() in [0, 1)
                 if random.random() < 0.1:
@@ -461,7 +399,7 @@ class CorrectionDatasetGenerator:
                     self.delete_token(token_idx)
                     token_idx += 1
                 elif random.random() < 0.05:
-                    token_idx = self.add_extra_token(token_idx)
+                    token_idx = self.add_extra_token(token_idx, self._tokens)
                 elif random.random() < 0.1 and "##" + self._tokens[token_idx] in self.vocab_set:
                     self.add_space(token_idx)
                     token_idx += 1
@@ -470,26 +408,15 @@ class CorrectionDatasetGenerator:
                     self.remove_space(token_idx)
                     token_idx += 1
                 else:
-                    token_idx = self.make_ocr_typo2(token_idx)
+                    token_idx = self.make_ocr_typo(token_idx, self._tokens, self._tokens)
             else:
                 self._error_tokens.append(self._tokens[token_idx])
                 self._correct_tokens.append([self._tokens[token_idx]])
                 token_idx += 1
         self.make_sparse()
-
         self.make_dense()
-
         self.reset_space_after_punctuation()
-
         self.pad_to_length_3()
-
-        # with open("/home/mcsilla/machine_learning/gitrepos/err-corr/test_output.txt", "w") as f:
-        #     standard_out = sys.stdout
-        #     sys.stdout = f
-        #     print("Error tokens: \n\n", self._error_tokens, "\n\n Correction tokens: \n\n", correct_tokens)
-        #     # print("alma")
-        #     sys.stdout = standard_out
-
         return self._error_tokens, self._correct_tokens
     
     def create_input(self, tokens):
