@@ -2,41 +2,17 @@
 # régiesítve nem ugyanannyi karakter lesz
 # az errorizálás is módosítja a karakterek számát 
 
-from copy import deepcopy
 import itertools
 from collections import defaultdict
 import random
 import csv
-from pathlib import Path
 import sys
 import tqdm
 import numpy as np
 import tensorflow as tf
-import re
 from useful import ManipulateTokens
-
-
 from official.nlp.bert.tokenization import _is_punctuation
 
-
-def detokenize_char(tokenizer, char_token):
-    if char_token.startswith("##"):
-        return char_token[2:]
-    if char_token in set([tokenizer.cls_token, '[SEP]', '[MASK]', '[PAD]', '[UNK]']):
-        return char_token
-    if _is_punctuation(char_token):
-        return char_token
-    return (" " + char_token)
-
-
-# def corrected_tokenizer(sequence, tokenizer, seq_length):
-#     ids_object = tokenizer(text="a" + sequence, padding='max_length', max_length=seq_length + 1)
-#     for key in ids_object:
-#         ids_object[key] = ids_object[key][:1] + ids_object[key][2:]
-#     return ids_object
-
-def corrected_tokenizer(sequence, tokenizer):
-    return tokenizer.tokenize("a" + sequence)[1:]
 
 class ErrorTable:
     def __init__(self, _tokenizer):
@@ -233,6 +209,7 @@ class MakeTextOld:
                 token_idx += 1
         return (self._correction_to_old_tokens, self._old_tokens)
 
+
 class CorrectionDatasetGenerator:
     error_frequency = 0.15
     sparse_frequency = 0.2
@@ -240,8 +217,6 @@ class CorrectionDatasetGenerator:
     old_frequency = 0.1
     common_extra_chars = "{}jli;|\\/(:)!1.t'"
     hyphens = "\xad-"
-    pat_sz = re.compile("(?<!s)sz")
-    pat_ssz = re.compile("ssz")
 
     def __init__(self, _tokenizer, _ocr_errors_generator, _seq_length, _old_text_generator):
         self.tokenizer = _tokenizer
@@ -257,7 +232,6 @@ class CorrectionDatasetGenerator:
         self.old_gen = _old_text_generator
         self._tokens = None
         self._old_tokens = None
-        self._correction_to_old_tokens = None
         self._error_tokens = None
         self._correct_tokens = None
 
@@ -355,40 +329,9 @@ class CorrectionDatasetGenerator:
         self._tokens = tokens
         self._error_tokens = []
         self._correct_tokens = []
-        self._old_tokens = []
-        self._correction_to_old_tokens = []
         age = "old"
         if age == "old":
-            with open("old_table.txt", encoding="utf-8") as f:
-                self.old_gen.load_change_table_from_file(f)
-            # print(old_text_generator.change_table)
-            token_idx = 0
-            # print(self.corr_gen.correct_tokenizer(self.tokenizer.tokenize("T[PAD][PAD]TY")))
-            while token_idx < len(self._tokens):
-                # make old
-                in_table = []
-                for i in reversed(range(4)):
-                    if self.old_gen.get_old_version(self._tokens[token_idx:token_idx + i + 1]):
-                        in_table.append(i)
-                        break
-                if self._tokens[token_idx].lower() == "a" and len(self._tokens[token_idx + 1]) < 3:
-                    self._old_tokens += self.old_gen.get_old_version([self._tokens[token_idx]])
-                    self._correction_to_old_tokens += self.old_gen.get_corrected_version([self._tokens[token_idx]])
-                    token_idx += 1
-                elif "".join(self._tokens[token_idx:token_idx + 2]).lower() == "é##s" and len(self._tokens[token_idx + 2]) < 3:
-                    self._old_tokens += self.old_gen.get_old_version(self._tokens[token_idx:token_idx + 2])
-                    self._correction_to_old_tokens += self.old_gen.get_corrected_version(self._tokens[token_idx:token_idx + 2])
-                    token_idx += 2
-                elif in_table:
-                    i = in_table[0]
-                    self._old_tokens += self.old_gen.get_old_version(self._tokens[token_idx:token_idx + i + 1])
-                    self._correction_to_old_tokens += self.old_gen.get_corrected_version(self._tokens[token_idx:token_idx + i + 1])
-                    token_idx += i + 1
-                else:
-                    self._old_tokens.append(self._tokens[token_idx])
-                    self._correction_to_old_tokens.append(self._tokens[token_idx])
-                    token_idx += 1
-            self._tokens = self._correction_to_old_tokens
+            self._tokens, self._old_tokens = self.old_gen.make_tokens_old(self._tokens)
         else:
             self._old_tokens = self._tokens
         token_idx = 0
@@ -451,21 +394,9 @@ class CorrectionDatasetGenerator:
             "label_2": input_ids[2]
         }
 
-    def restore_text_from_corrected_tokens(self, corrected_tokens):
-        text = "".join([detokenize_char(self.tokenizer, token) for triple in corrected_tokens for token in triple if token != "[PAD]"])
-        return text
-
-    # def translate_old_hun(self, text):
-    #     rules = (
-    #         lambda content: self.pat_sz.sub("fz", content),
-    #         lambda content: self.pat_ssz.sub("fzfz", content),
-    #     )
-    #     for rule in rules:
-    #         text = rule(text)
-    #     return text
-
 
     def generate_dataset(self, dataset_dir, thread, seed_input):
+        tok = ManipulateTokens(self.tokenizer)
         NUM_OF_THREADS = 1
         input_files = sorted(tf.io.gfile.glob(dataset_dir + "/AA/wiki_00_test"))
         # input_files = sorted(tf.io.gfile.glob(dataset_dir + "/*/wiki_*"))
@@ -504,8 +435,8 @@ class CorrectionDatasetGenerator:
                                     standard_out = sys.stdout
                                     sys.stdout = f
                                     # print(self.corr_gen.error_table)
-                                    print("".join([detokenize_char(self.tokenizer, token) for token in modified_tokens]))
-                                    print(self.restore_text_from_corrected_tokens(corrected_tokens))
+                                    print("".join([tok.detokenize_char(token) for token in modified_tokens]))
+                                    print(tok.restore_text_from_corrected_tokens(corrected_tokens))
                                     # print(inputs["input_ids"], "\n", inputs["attention_mask"], "\n", inputs["token_type_ids"], "\n\n",\
                                     # labels["label_0"], "\n", labels["label_1"], "\n", labels["label_2"], "\n\n")
                                     print("=" * 100)
@@ -522,7 +453,7 @@ def int64feature(int_list):
 
 def printable_format(tokenizer, token_ids):
     tokens = tokenizer.convert_ids_to_tokens([token_id for token_id in token_ids if token_id >= 0])
-    return "".join([detokenize_char(tokenizer, token) for token in tokens])
+    return "".join([tok.detokenize_char(token) for token in tokens])
 
 
 def write_examples_to_tfrecord(examples, tf_records_writer):
