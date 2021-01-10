@@ -190,11 +190,11 @@ class MakeTextOld:
                 if self.get_old_version(tokens[token_idx:token_idx + i + 1]):
                     in_table.append(i)
                     break
-            if tokens[token_idx].lower() == "a" and len(tokens[token_idx + 1]) < 3:
+            if tokens[token_idx].lower() == "a" and token_idx + 1 < len(tokens) and len(tokens[token_idx + 1]) < 3:
                 self._old_tokens += self.get_old_version([tokens[token_idx]])
                 self._correction_to_old_tokens += self.get_corrected_version([tokens[token_idx]])
                 token_idx += 1
-            elif "".join(tokens[token_idx:token_idx + 2]).lower() == "é##s" and len(tokens[token_idx + 2]) < 3:
+            elif "".join(tokens[token_idx:token_idx + 2]).lower() == "é##s" and token_idx + 2 < len(tokens) and len(tokens[token_idx + 2]) < 3:
                 self._old_tokens += self.get_old_version(tokens[token_idx:token_idx + 2])
                 self._correction_to_old_tokens += self.get_corrected_version(tokens[token_idx:token_idx + 2])
                 token_idx += 2
@@ -209,6 +209,7 @@ class MakeTextOld:
                 token_idx += 1
         return (self._correction_to_old_tokens, self._old_tokens)
 
+# class MakeTextErroneous:
 
 class CorrectionDatasetGenerator:
     error_frequency = 0.15
