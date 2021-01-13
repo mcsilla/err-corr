@@ -180,36 +180,39 @@ class MakeTextOld:
         self._correction_to_old_tokens = []
         with open("old_table.txt", encoding="utf-8") as f:
             self.load_change_table_from_file(f)
-        # print(old_text_generator.change_table)
+        # print(self.change_table)
         token_idx = 0
+        whole_words = ["a", "é##s", "i##s"]
         # print(self.corr_gen.correct_tokenizer(self.tokenizer.tokenize("T[PAD][PAD]TY")))
         while token_idx < len(tokens):
             # make old
+            whole_word_found = False
+            for i in range(1, 3):
+                if "".join(tokens[token_idx:token_idx + i]).lower() in whole_words and token_idx + i < len(tokens) and len(tokens[token_idx + i]) == 1:
+                    whole_word_found = True
+                    self._old_tokens += self.get_old_version(tokens[token_idx:token_idx + i])
+                    self._correction_to_old_tokens += self.get_corrected_version(tokens[token_idx:token_idx + i])
+                    token_idx += i
+                    break
+            if whole_word_found:
+                continue
             in_table = []
             for i in reversed(range(4)):
                 if self.get_old_version(tokens[token_idx:token_idx + i + 1]):
                     in_table.append(i)
                     break
-            if tokens[token_idx].lower() == "a" and token_idx + 1 < len(tokens) and len(tokens[token_idx + 1]) < 3:
-                self._old_tokens += self.get_old_version([tokens[token_idx]])
-                self._correction_to_old_tokens += self.get_corrected_version([tokens[token_idx]])
-                token_idx += 1
-            elif "".join(tokens[token_idx:token_idx + 2]).lower() == "é##s" and token_idx + 2 < len(tokens) and len(tokens[token_idx + 2]) < 3:
-                self._old_tokens += self.get_old_version(tokens[token_idx:token_idx + 2])
-                self._correction_to_old_tokens += self.get_corrected_version(tokens[token_idx:token_idx + 2])
-                token_idx += 2
-            elif in_table:
+            if in_table and "".join(tokens[token_idx:token_idx + in_table[0] + 1]).lower() not in whole_words:
                 i = in_table[0]
                 self._old_tokens += self.get_old_version(tokens[token_idx:token_idx + i + 1])
                 self._correction_to_old_tokens += self.get_corrected_version(tokens[token_idx:token_idx + i + 1])
                 token_idx += i + 1
+                continue
             else:
                 self._old_tokens.append(tokens[token_idx])
                 self._correction_to_old_tokens.append(tokens[token_idx])
                 token_idx += 1
         return (self._correction_to_old_tokens, self._old_tokens)
 
-# class MakeTextErroneous:
 
 class CorrectionDatasetGenerator:
     error_frequency = 0.15
@@ -273,10 +276,11 @@ class CorrectionDatasetGenerator:
     def make_ocr_typo(self, token_idx, old_tokens, tokens):
         in_table = []
         for i in range(3):
-            if self.corr_gen.get_error(old_tokens[token_idx:token_idx + i + 1]):
+            if self.corr_gen.get_error2(old_tokens[token_idx:token_idx + i + 1]):
                 in_table.append(i)
         if in_table:
-            join_tokens = random.choice(in_table)
+            # join_tokens = random.choice(in_table)
+            join_tokens = in_table[-1]
             # a régiesített tokenek szelete, ehhez keresünk a táblázatból typot
             slice_old_tokens = old_tokens[token_idx:token_idx + join_tokens + 1]
             # a korrekció majd ez lesz
@@ -330,6 +334,7 @@ class CorrectionDatasetGenerator:
         self._tokens = tokens
         self._error_tokens = []
         self._correct_tokens = []
+        # print(self.tokenizer.tokenize("s[MASK]sz"))
         age = "old"
         if age == "old":
             self._tokens, self._old_tokens = self.old_gen.make_tokens_old(self._tokens)
@@ -435,12 +440,29 @@ class CorrectionDatasetGenerator:
                                 with open("/home/mcsilla/machine_learning/gitrepos/err-corr/test_output.txt", "a") as f:
                                     standard_out = sys.stdout
                                     sys.stdout = f
+
+                                    corrected_tokens_without_PAD = []
+                                    for item in corrected_tokens:
+                                        corrected_tokens_without_PAD.append([])
+                                        for corr in item:
+                                            if corr != "[PAD]":
+                                                corrected_tokens_without_PAD[-1].append(corr)
+                                            else:
+                                                corrected_tokens_without_PAD[-1].append("")
+
+
+                                    print("".join([f"|{item:^11}|" for item in modified_tokens]))
+                                    print("-" * 200)
+                                    print("".join([f"|{item1:^3} {item2:^3} {item3:^3}|" for [item1, item2, item3] in corrected_tokens_without_PAD]))
+                                    print("=" * 200)
+
                                     # print(self.corr_gen.error_table)
-                                    print("".join([tok.detokenize_char(token) for token in modified_tokens]))
-                                    print(tok.restore_text_from_corrected_tokens(corrected_tokens))
+                                    # print("".join([tok.detokenize_char(token) for token in modified_tokens]))
+                                    # print(tok.restore_text_from_corrected_tokens(corrected_tokens))
                                     # print(inputs["input_ids"], "\n", inputs["attention_mask"], "\n", inputs["token_type_ids"], "\n\n",\
                                     # labels["label_0"], "\n", labels["label_1"], "\n", labels["label_2"], "\n\n")
-                                    print("=" * 100)
+                                    # print(modified_tokens)
+                                    # print(corrected_tokens)
                                     sys.stdout = standard_out
                                 yield (inputs["input_ids"], inputs["attention_mask"], inputs["token_type_ids"]), \
                                     (labels["label_0"], labels["label_1"], labels["label_2"])

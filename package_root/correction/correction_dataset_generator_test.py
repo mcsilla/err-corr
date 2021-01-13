@@ -1,8 +1,26 @@
 from correction import correction_dataset_generator
 from transformers import BertTokenizerFast
+import pytest
 
-tokenizer_hu = BertTokenizerFast("data/tokenizer/hu/alphabet", do_lower_case=False)
-make_old = correction_dataset_generator.MakeTextOld(tokenizer_hu)
+@pytest.fixture
+def tokenizer_hu():
+    return BertTokenizerFast("data/tokenizer/hu/alphabet", do_lower_case=False)
+
+@pytest.fixture
+def old_gen(tokenizer_hu):
+    return correction_dataset_generator.MakeTextOld(tokenizer_hu)
+
+@pytest.fixture
+def ocr_error_table(tokenizer_hu):
+    return correction_dataset_generator.ErrorTable(tokenizer_hu)
+
+@pytest.fixture
+def seq_length():
+    return 64
+
+@pytest.fixture
+def data_gen(tokenizer_hu, ocr_error_table, seq_length, old_gen):
+    return correction_dataset_generator.CorrectionDatasetGenerator(tokenizer_hu, ocr_error_table, seq_length, old_gen)
 
 # def test_xa(mocker):
 #     tokenizer = mocker.MagicMock()
@@ -17,26 +35,85 @@ test_str = [
     "csipet és a",
     "Szerecsenként",
     "jövőbeli",
+    "menjen",
+    "állja",
+    "üljön",
+    "különb",
 ]
 
-test_old_tokens = [
-    ["Ö", "##f", "##z", "##f", "##z", "##e"],
-    ["t", "##s", "##i", "##p", "##e", "##t", "'", "s", "a", "'"],
-    ["F", "##z", "##e", "##r", "##e", "##t", "##s", "##e", "##n", "-", "k", "##é", "##n", "##t"],
-    ["j", "##ö", "##v", "##ő", "-", "b", "##é", "##l", "##i"]
-]
+test_data_correction_gen = (
+    ("Össze", ["Ö", "##s", "[PAD]", "##s", "##z", "##e"]),
+    ("csipet és a cs", ["c", "##s", "##i", "##p", "##e", "##t", "é", "##s", "a", "[PAD]", "c", "##s"]),
+    ("Szerecsenként", ["S", "##z", "##e", "##r", "##e", "##c", "##s", "##e", "##n", "[PAD]", "##k", "##é", "##n", "##t"]),
+    ("jövőbeli", ["j", "##ö", "##v", "##ő", "[PAD]", "##b", "##e", "##l", "##i"]),
+    ("menjen", ["m", "##e", "[PAD]", "##n", "##j", "##e", "##n"]),
+    ("állja", ["á", "##l", "##l", "##j", "##a"]),
+    ("üljön", ["ü", "[PAD]", "##l", "##j", "##ö", "##n"]),
+    ("különb", ["k", "##ü", "##l", "##ö", "##n", "##b"]),
+    ("megszentel", ["m", "##e", "##g", "[PAD]", "##s", "##z", "##e", "##n", "##t", "##e", "##l"]),
+    ("tömegel", ["t", "##ö", "##m", "##e", "##g", "##e", "##l"]),
+    ("ezt is sz", ["e", "##z", "##t", "[PAD]", "i", "##s", "s", "##z"]),
+    ("ismer", ["i", "##s", "##m", "##e", "##r"]),
+    ("ész", ["é", "##s", "##z"]),
+    ("apad", ["a", "##p", "##a", "##d"]),
+)
+
+test_data_old_gen = (
+    ("Össze", ["Ö", "##f", "##z", "##f", "##z", "##e"]),
+    ("csipet és a cs", ["t", "##s", "##i", "##p", "##e", "##t", "'", "s", "a", "'", "t", "##s"]),
+    ("Szerecsenként", ["F", "##z", "##e", "##r", "##e", "##t", "##s", "##e", "##n", "-", "k", "##é", "##n", "##t"]),
+    ("jövőbeli", ["j", "##ö", "##v", "##ő", "-", "b", "##é", "##l", "##i"]),
+    ("menjen", ["m", "##e", "##n", "##n", "##y", "##e", "##n"]),
+    ("állja", ["á", "##l", "##l", "##y", "##a"]),
+    ("üljön", ["ü", "##l", "##l", "##y", "##ö", "##n"]),
+    ("különb", ["k", "##ü", "##l", "##ö", "##m", "##b"]),
+    ("megszentel", ["m", "##e", "##g", "-", "##f", "##z", "##e", "##n", "##t", "##e", "##l"]),
+    ("tömegel", ["t", "##ö", "##m", "##e", "##g", "##e", "##l"]),
+    ("ezt is sz", ["e", "##z", "##t", "-", "i", "##s", "f", "##z"]),
+    ("ismer", ["i", "##s", "##m", "##e", "##r"]),
+    ("ész", ["é", "##f", "##z"]),
+    ("apad", ["a", "##p", "##a", "##d"]),
+)
+
 
 test_correction_tokens = [
     ["Ö", "##s", "[PAD]", "##s", "##z", "##e"],
     ["c", "##s", "##i", "##p", "##e", "##t", "é", "##s", "a", "[PAD]"],
     ["S", "##z", "##e", "##r", "##e", "##c", "##s", "##e", "##n", "[PAD]", "##k", "##é", "##n", "##t"],
-    ["j", "##ö", "##v", "##ő", "[PAD]", "##b", "##e", "##l", "##i"]
+    ["j", "##ö", "##v", "##ő", "[PAD]", "##b", "##e", "##l", "##i"],
+    ["m", "##e", "[PAD]", "##n", "##j", "##e", "##n"],
+    ["á", "##l", "##l", "##j", "##a"],
+    ["ü", "[PAD]", "##l", "##j", "##ö", "##n"],
+    ["k", "##ü", "##l", "##ö", "##n", "##b"]
 ]
-correction_to_old_list = [make_old.make_tokens_old(tokenizer_hu.tokenize(text))[0] for text in test_str]
-old_list = [make_old.make_tokens_old(tokenizer_hu.tokenize(text))[1] for text in test_str]
 
-def test_old_correction(mocker):
-    assert all([a == b for a, b in zip(correction_to_old_list, test_correction_tokens)])
+@pytest.mark.parametrize("test_input,expected", [(inp, outp) for inp, outp in test_data_old_gen])
+def test_old_gen(test_input, expected, tokenizer_hu, old_gen):
+    assert old_gen.make_tokens_old(tokenizer_hu.tokenize(test_input))[1] == expected
 
-def test_old(mocker):
-    assert all([a == b for a, b in zip(old_list, test_old_tokens)])
+
+@pytest.mark.parametrize("test_input,expected", [(inp, outp) for inp, outp in test_data_correction_gen])
+def test_correction_gen(test_input, expected, tokenizer_hu, old_gen):
+    assert old_gen.make_tokens_old(tokenizer_hu.tokenize(test_input))[0] == expected
+
+
+def test_get_error_1(ocr_error_table):
+    with open("ocr_errors/hu/ocr_errors.txt", encoding="utf-8") as f:
+        ocr_error_table.load_table_from_file(f)
+    assert ocr_error_table.get_error2(["s", "##s", "##z"])[1] in [("s", "##z", "##s", "##z"), ("s", "##z", "-", "s", "##z"), ("s", "##z", "s", "##z")]
+
+
+def test_get_error_0(ocr_error_table):
+    with open("ocr_errors/hu/ocr_errors.txt", encoding="utf-8") as f:
+        ocr_error_table.load_table_from_file(f)
+    assert ocr_error_table.get_error2(["s", "##s", "##z"])[0] in [("s", "[PAD]", "##s", "##z"), ("s", "[PAD]", "[PAD]", "##s", "##z")]
+
+
+def test_ocr_typo(tokenizer_hu, data_gen, ocr_error_table):
+    data_gen._error_tokens = []
+    data_gen._correct_tokens = []
+    with open("ocr_errors/hu/ocr_errors.txt", encoding="utf-8") as f:
+        ocr_error_table.load_table_from_file(f)
+    data_gen.make_ocr_typo(0, ["s", "##s", "##z"], ["s", "##s", "##z"])
+    assert data_gen._error_tokens in [["s", "##z", "##s", "##z"], ["s", "##z", "-", "s", "##z"], ["s", "##z", "s", "##z"]]
+

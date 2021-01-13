@@ -41,7 +41,7 @@ setup(
         'tensorflow==2.2.1',
         'tf-models-official==2.2.2',
         'tokenizers>=0.9.3',
-        'transformers>=3.5.1',
+        'transformers>=3.0.2',
     ],
 
     extras_require={},
