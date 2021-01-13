@@ -152,28 +152,35 @@ class MakeTextOld:
         tok = ManipulateTokens(self.tokenizer)
         for row in rows_anywhere:
             for original_tokens, old_tokens, correction_tokens in zip(*[tok.tokenize_all_versions(row[i]) for i in range(3)]):
-                 change_table[tuple(original_tokens)] = (old_tokens, correction_tokens)
+                 change_table[tuple(original_tokens)] = (old_tokens, correction_tokens, row[3])
         for row in rows_middle_or_end:
             for original_tokens, old_tokens, correction_tokens in zip(*[tok.tokenize_all_versions_with_starting_hash(row[i]) for i in range(3)]):
-                 change_table[tuple(original_tokens)] = (old_tokens, correction_tokens)
+                 change_table[tuple(original_tokens)] = (old_tokens, correction_tokens, row[3])
         for row in rows_beginning:
             for original_tokens, old_tokens, correction_tokens in zip(*[tok.tokenize_all_versions_without_starting_hash(row[i]) for i in range(3)]):
-                 change_table[tuple(original_tokens)] = (old_tokens, correction_tokens)
+                 change_table[tuple(original_tokens)] = (old_tokens, correction_tokens, row[3])
         self.change_table = change_table
 
-    def get_old_version(self, tokens_list):
-        change_table_dict = dict(self.change_table)
+    def get_old_version(self, tokens_list, table):
+        change_table_dict = dict(table)
         key = tuple(tokens_list)
         if key in change_table_dict:
             return change_table_dict[key][0]
         return None
 
-    def get_corrected_version(self, tokens_list):
-        change_table_dict = dict(self.change_table)
+    def get_corrected_version(self, tokens_list, table):
+        change_table_dict = dict(table)
         key = tuple(tokens_list)
         if key in change_table_dict:
             return change_table_dict[key][1]
-        return None     
+        return None
+
+    def get_frequency(self, tokens_list):
+        change_table_dict = dict(self.change_table)
+        key = tuple(tokens_list)
+        if key in change_table_dict:
+            return change_table_dict[key][2]
+        return 0     
 
     def make_tokens_old(self, tokens):
         self._old_tokens = []
@@ -190,27 +197,26 @@ class MakeTextOld:
             for i in range(1, 3):
                 if "".join(tokens[token_idx:token_idx + i]).lower() in whole_words and token_idx + i < len(tokens) and len(tokens[token_idx + i]) == 1:
                     whole_word_found = True
-                    self._old_tokens += self.get_old_version(tokens[token_idx:token_idx + i])
-                    self._correction_to_old_tokens += self.get_corrected_version(tokens[token_idx:token_idx + i])
+                    self._old_tokens += self.get_old_version(tokens[token_idx:token_idx + i], self.change_table)
+                    self._correction_to_old_tokens += self.get_corrected_version(tokens[token_idx:token_idx + i], self.change_table)
                     token_idx += i
                     break
             if whole_word_found:
                 continue
             in_table = []
             for i in reversed(range(4)):
-                if self.get_old_version(tokens[token_idx:token_idx + i + 1]):
+                if self.get_old_version(tokens[token_idx:token_idx + i + 1], self.change_table):
                     in_table.append(i)
                     break
-            if in_table and "".join(tokens[token_idx:token_idx + in_table[0] + 1]).lower() not in whole_words:
+            if in_table and random.random() < float(self.get_frequency(tokens[token_idx:token_idx + in_table[0] + 1])) and "".join(tokens[token_idx:token_idx + in_table[0] + 1]).lower() not in whole_words :
                 i = in_table[0]
-                self._old_tokens += self.get_old_version(tokens[token_idx:token_idx + i + 1])
-                self._correction_to_old_tokens += self.get_corrected_version(tokens[token_idx:token_idx + i + 1])
+                self._old_tokens += self.get_old_version(tokens[token_idx:token_idx + i + 1], self.change_table)
+                self._correction_to_old_tokens += self.get_corrected_version(tokens[token_idx:token_idx + i + 1], self.change_table)
                 token_idx += i + 1
                 continue
-            else:
-                self._old_tokens.append(tokens[token_idx])
-                self._correction_to_old_tokens.append(tokens[token_idx])
-                token_idx += 1
+            self._old_tokens.append(tokens[token_idx])
+            self._correction_to_old_tokens.append(tokens[token_idx])
+            token_idx += 1
         return (self._correction_to_old_tokens, self._old_tokens)
 
 
