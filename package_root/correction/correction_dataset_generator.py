@@ -132,7 +132,6 @@ class ErrorTable:
             return random.choice(error_table_dict[key])
         return None
 
-
 class MakeTextOld:
     def __init__(self, _tokenizer):
         self.tokenizer = _tokenizer
@@ -152,34 +151,34 @@ class MakeTextOld:
         tok = ManipulateTokens(self.tokenizer)
         for row in rows_anywhere:
             for original_tokens, old_tokens, correction_tokens in zip(*[tok.tokenize_all_versions(row[i]) for i in range(3)]):
-                 change_table[tuple(original_tokens)] = (old_tokens, correction_tokens, row[3])
+                 change_table[tuple(original_tokens)].append((old_tokens, correction_tokens, row[3]))
         for row in rows_middle_or_end:
             for original_tokens, old_tokens, correction_tokens in zip(*[tok.tokenize_all_versions_with_starting_hash(row[i]) for i in range(3)]):
-                 change_table[tuple(original_tokens)] = (old_tokens, correction_tokens, row[3])
+                 change_table[tuple(original_tokens)].append((old_tokens, correction_tokens, row[3]))
         for row in rows_beginning:
             for original_tokens, old_tokens, correction_tokens in zip(*[tok.tokenize_all_versions_without_starting_hash(row[i]) for i in range(3)]):
-                 change_table[tuple(original_tokens)] = (old_tokens, correction_tokens, row[3])
+                 change_table[tuple(original_tokens)].append((old_tokens, correction_tokens, row[3]))
         self.change_table = change_table
 
     def get_old_version(self, tokens_list, table):
         change_table_dict = dict(table)
         key = tuple(tokens_list)
         if key in change_table_dict:
-            return change_table_dict[key][0]
+            return [item[0] for item in change_table_dict[key]]
         return None
 
     def get_corrected_version(self, tokens_list, table):
         change_table_dict = dict(table)
         key = tuple(tokens_list)
         if key in change_table_dict:
-            return change_table_dict[key][1]
+            return [item[1] for item in change_table_dict[key]]
         return None
 
     def get_frequency(self, tokens_list):
         change_table_dict = dict(self.change_table)
         key = tuple(tokens_list)
         if key in change_table_dict:
-            return change_table_dict[key][2]
+            return [item[2] for item in change_table_dict[key]]
         return 0     
 
     def make_tokens_old(self, tokens):
@@ -189,16 +188,18 @@ class MakeTextOld:
             self.load_change_table_from_file(f)
         # print(self.change_table)
         token_idx = 0
-        whole_words = ["a", "é##s", "i##s"]
+        # ezeknél kell csekkolni, hogy a szó végén vannak-e
+        whole_words = ["a", "é##s", "i##s", "##b##b", "v##o##l##t"]
         # print(self.corr_gen.correct_tokenizer(self.tokenizer.tokenize("T[PAD][PAD]TY")))
         while token_idx < len(tokens):
             # make old
             whole_word_found = False
-            for i in range(2):
-                if "".join(tokens[token_idx:token_idx + i + 1]).lower() in whole_words and token_idx + i < len(tokens) and len(tokens[token_idx + i + 1]) == 1:
+            for i in range(4):
+                if "".join(tokens[token_idx:token_idx + i + 1]).lower() in whole_words and token_idx + i + 1 < len(tokens) and len(tokens[token_idx + i + 1]) == 1 and \
+                    random.random() < float(self.get_frequency(tokens[token_idx:token_idx + i + 1])[0]):
                     whole_word_found = True
-                    self._old_tokens += self.get_old_version(tokens[token_idx:token_idx + i + 1], self.change_table)
-                    self._correction_to_old_tokens += self.get_corrected_version(tokens[token_idx:token_idx + i + 1], self.change_table)
+                    self._old_tokens += self.get_old_version(tokens[token_idx:token_idx + i + 1], self.change_table)[0]
+                    self._correction_to_old_tokens += self.get_corrected_version(tokens[token_idx:token_idx + i + 1], self.change_table)[0]
                     token_idx += i + 1
                     break
             if whole_word_found:
@@ -207,24 +208,34 @@ class MakeTextOld:
             for i in reversed(range(4)):
                 if self.get_old_version(tokens[token_idx:token_idx + i + 1], self.change_table):
                     in_table.append(i)
+                    frequency_smaller = float(self.get_frequency(tokens[token_idx:token_idx + i + 1])[0])
                     break
-            if in_table and random.random() < float(self.get_frequency(tokens[token_idx:token_idx + in_table[0] + 1])) and "".join(tokens[token_idx:token_idx + in_table[0] + 1]).lower() not in whole_words :
+            random_num = random.random()
+            if in_table and  random_num <  frequency_smaller and "".join(tokens[token_idx:token_idx + in_table[0] + 1]).lower() not in whole_words:
                 i = in_table[0]
-                self._old_tokens += self.get_old_version(tokens[token_idx:token_idx + i + 1], self.change_table)
-                self._correction_to_old_tokens += self.get_corrected_version(tokens[token_idx:token_idx + i + 1], self.change_table)
+                self._old_tokens += self.get_old_version(tokens[token_idx:token_idx + i + 1], self.change_table)[0]
+                self._correction_to_old_tokens += self.get_corrected_version(tokens[token_idx:token_idx + i + 1], self.change_table)[0]
                 token_idx += i + 1
                 continue
+            if in_table and len(self.get_old_version(tokens[token_idx:token_idx + in_table[0] + 1], self.change_table)) > 1 and \
+                random_num < frequency_smaller + float(self.get_frequency(tokens[token_idx:token_idx + i + 1])[1]) and \
+                    "".join(tokens[token_idx:token_idx + in_table[0] + 1]).lower() not in whole_words:
+                i = in_table[0]
+                self._old_tokens += self.get_old_version(tokens[token_idx:token_idx + i + 1], self.change_table)[1]
+                self._correction_to_old_tokens += self.get_corrected_version(tokens[token_idx:token_idx + i + 1], self.change_table)[1]
+                token_idx += i + 1
+                continue
+
             self._old_tokens.append(tokens[token_idx])
             self._correction_to_old_tokens.append(tokens[token_idx])
             token_idx += 1
         return (self._correction_to_old_tokens, self._old_tokens)
 
-
 class CorrectionDatasetGenerator:
     error_frequency = 0.15
     sparse_frequency = 0.2
     dense_frequency = 0.2
-    old_frequency = 0.1
+    old_frequency = 0.06
     common_extra_chars = "{}jli;|\\/(:)!1.t'"
     hyphens = "\xad-"
 
@@ -341,7 +352,6 @@ class CorrectionDatasetGenerator:
         self._error_tokens = []
         self._correct_tokens = []
         # print(self.tokenizer.tokenize("s[MASK]sz"))
-        age = age
         if age == "old":
             self._tokens, self._old_tokens = self.old_gen.make_tokens_old(self._tokens)
         else:
@@ -407,7 +417,7 @@ class CorrectionDatasetGenerator:
         }
 
 
-    def generate_dataset(self, dataset_dir, thread, seed_input, age):
+    def generate_dataset(self, dataset_dir, thread, seed_input):
         tok = ManipulateTokens(self.tokenizer)
         NUM_OF_THREADS = 1
         input_files = sorted(tf.io.gfile.glob(dataset_dir + "/AA/wiki_00_test"))
@@ -436,6 +446,10 @@ class CorrectionDatasetGenerator:
                             tokens = self.tokenizer.tokenize(doc) # tokenize the textblocks between empty lines
                             if not tokens:
                                 continue
+                            if random.random() < self.old_frequency:
+                                age = "old"
+                            else:
+                                age = "new"
                             all_modified_tokens, all_corrected_tokens = self.run(tokens, age)
                             input_len = len(all_modified_tokens)
                             for start_index in range(0, input_len, self.seq_length - 2):

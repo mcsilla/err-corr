@@ -29,18 +29,6 @@ def data_gen(tokenizer_hu, ocr_error_table, seq_length, old_gen):
 #     generator = correction_dataset_generator.CorrectionDatasetGenerator(tokenizer, mocker.MagicMock(), 5)
 #     assert generator.vocab == ['##a', '##b', 'a', 'b']
 
-
-test_str = [
-    "Össze",
-    "csipet és a",
-    "Szerecsenként",
-    "jövőbeli",
-    "menjen",
-    "állja",
-    "üljön",
-    "különb",
-]
-
 test_data_correction_gen = (
     ("Össze", ["Ö", "##s", "[PAD]", "##s", "##z", "##e"]),
     ("csipet és a cs", ["c", "##s", "##i", "##p", "##e", "##t", "é", "##s", "a", "[PAD]", "c", "##s"]),
@@ -56,6 +44,8 @@ test_data_correction_gen = (
     ("ismer", ["i", "##s", "##m", "##e", "##r"]),
     ("ész", ["é", "##s", "##z"]),
     ("apad", ["a", "##p", "##a", "##d"]),
+    ("legjobb r", ["l", "##e", "##g", "[PAD]", "##j", "##o", "##b", "##b", "r"]),
+    ("legjobban", ["l", "##e", "##g", "[PAD]", "##j", "##o", "##b", "##b", "##a", "##n"]),
 )
 
 test_data_old_gen = (
@@ -73,19 +63,34 @@ test_data_old_gen = (
     ("ismer", ["i", "##s", "##m", "##e", "##r"]),
     ("ész", ["é", "##f", "##z"]),
     ("apad", ["a", "##p", "##a", "##d"]),
+    ("legjobb r", ["l", "##e", "##g", "-", "##j", "##o", "##b", "'", "r"]),
+    ("legjobban", ["l", "##e", "##g", "-", "##j", "##o", "##b", "##b", "##a", "##n"]),
 )
 
 
-test_correction_tokens = [
-    ["Ö", "##s", "[PAD]", "##s", "##z", "##e"],
-    ["c", "##s", "##i", "##p", "##e", "##t", "é", "##s", "a", "[PAD]"],
-    ["S", "##z", "##e", "##r", "##e", "##c", "##s", "##e", "##n", "[PAD]", "##k", "##é", "##n", "##t"],
-    ["j", "##ö", "##v", "##ő", "[PAD]", "##b", "##e", "##l", "##i"],
-    ["m", "##e", "[PAD]", "##n", "##j", "##e", "##n"],
-    ["á", "##l", "##l", "##j", "##a"],
-    ["ü", "[PAD]", "##l", "##j", "##ö", "##n"],
-    ["k", "##ü", "##l", "##ö", "##n", "##b"]
-]
+# ((old_tokens, correct_tokens), tokens_with_ocr_errors)
+test_data_ocr_typo_error = (
+    ((["s", "##s", "##z"], ["s", "##s", "##z"]), [["s", "##z", "##s", "##z"], ["s", "##z", "-", "s", "##z"], ["s", "##z", "s", "##z"]]),
+    ((["i", "##i"], ["i", "##i"]), [["ű"], ["ü"], ["l", "##l"], ["u"], ["t", "##i"], ["i", "##t"], ["n"]]),
+    ((["f"], ["s"]), [["i"], ["l"], ["1"], ["í"], ["ï"], ["j"], ["t"], ["r"], ["!"], ["|"], ["I"], ["J"], ["Í"]]),
+)
+
+test_data_ocr_typo_correction = (
+    ((["s", "##s", "##z"], ["s", "##s", "##z"]), [
+        [["s"], ["[PAD]"], ["##s"], ["##z"]],
+        [["s"], ["[PAD]"], ["[PAD]"], ["##s"], ["##z"]]
+    ]),
+    ((["i", "##i"], ["i", "##i"]), [
+        [["i", "##i"]],
+        [["i"], ["##i"]]
+    ]),
+    ((["f"], ["s"]), [
+        [["s"]],
+    ]),
+)
+
+
+
 
 @pytest.mark.parametrize("test_input,expected", [(inp, outp) for inp, outp in test_data_old_gen])
 def test_old_gen(test_input, expected, tokenizer_hu, old_gen):
@@ -109,11 +114,22 @@ def test_get_error_0(ocr_error_table):
     assert ocr_error_table.get_error2(["s", "##s", "##z"])[0] in [("s", "[PAD]", "##s", "##z"), ("s", "[PAD]", "[PAD]", "##s", "##z")]
 
 
-def test_ocr_typo(tokenizer_hu, data_gen, ocr_error_table):
+@pytest.mark.parametrize("test_input,expected", [(inp, outp) for inp, outp in test_data_ocr_typo_error])
+def test_ocr_typo_error(test_input, expected, tokenizer_hu, data_gen, ocr_error_table):
     data_gen._error_tokens = []
     data_gen._correct_tokens = []
     with open("ocr_errors/hu/ocr_errors.txt", encoding="utf-8") as f:
         ocr_error_table.load_table_from_file(f)
-    data_gen.make_ocr_typo(0, ["s", "##s", "##z"], ["s", "##s", "##z"])
-    assert data_gen._error_tokens in [["s", "##z", "##s", "##z"], ["s", "##z", "-", "s", "##z"], ["s", "##z", "s", "##z"]]
+    data_gen.make_ocr_typo(0, test_input[0], test_input[1])
+    assert data_gen._error_tokens in expected
+
+
+@pytest.mark.parametrize("test_input,expected", [(inp, outp) for inp, outp in test_data_ocr_typo_correction])
+def test_ocr_typo_correction(test_input, expected, tokenizer_hu, data_gen, ocr_error_table):
+    data_gen._error_tokens = []
+    data_gen._correct_tokens = []
+    with open("ocr_errors/hu/ocr_errors.txt", encoding="utf-8") as f:
+        ocr_error_table.load_table_from_file(f)
+    data_gen.make_ocr_typo(0, test_input[0], test_input[1])
+    assert data_gen._correct_tokens in expected
 
