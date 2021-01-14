@@ -19,6 +19,7 @@ def main():
     parser.add_argument('--config', type=str, required=True)
     parser.add_argument('--output', type=int, required=True)
     parser.add_argument('--thread', type=int, required=True)
+    parser.add_argument('--age', type=str, choices=['old', 'modern'], required=True)
 
     args, _ = parser.parse_known_args()
     with open(args.config) as f:
@@ -43,7 +44,7 @@ def main():
 
     for repeat in range(record_params["dupe_factor"]):
         example_cache = []
-        for inputs, outputs in dataset_generator.generate_dataset(files_paths["dataset_dir"], args.thread, seed_input):
+        for inputs, outputs in dataset_generator.generate_dataset(files_paths["dataset_dir"], args.thread, seed_input, args.age):
         # for inputs, outputs in tqdm.tqdm(dataset_generator.generate_dataset(files_paths["test_input_dir"])):
             inst_idx += 1
             feature = OrderedDict()

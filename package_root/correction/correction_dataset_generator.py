@@ -194,12 +194,12 @@ class MakeTextOld:
         while token_idx < len(tokens):
             # make old
             whole_word_found = False
-            for i in range(1, 3):
-                if "".join(tokens[token_idx:token_idx + i]).lower() in whole_words and token_idx + i < len(tokens) and len(tokens[token_idx + i]) == 1:
+            for i in range(2):
+                if "".join(tokens[token_idx:token_idx + i + 1]).lower() in whole_words and token_idx + i < len(tokens) and len(tokens[token_idx + i + 1]) == 1:
                     whole_word_found = True
-                    self._old_tokens += self.get_old_version(tokens[token_idx:token_idx + i], self.change_table)
-                    self._correction_to_old_tokens += self.get_corrected_version(tokens[token_idx:token_idx + i], self.change_table)
-                    token_idx += i
+                    self._old_tokens += self.get_old_version(tokens[token_idx:token_idx + i + 1], self.change_table)
+                    self._correction_to_old_tokens += self.get_corrected_version(tokens[token_idx:token_idx + i + 1], self.change_table)
+                    token_idx += i + 1
                     break
             if whole_word_found:
                 continue
@@ -336,12 +336,12 @@ class CorrectionDatasetGenerator:
         for correct_token in self._correct_tokens:
             correct_token += [self.tokenizer.pad_token] * (3 - len(correct_token))
 
-    def run(self, tokens):
+    def run(self, tokens, age):
         self._tokens = tokens
         self._error_tokens = []
         self._correct_tokens = []
         # print(self.tokenizer.tokenize("s[MASK]sz"))
-        age = "old"
+        age = age
         if age == "old":
             self._tokens, self._old_tokens = self.old_gen.make_tokens_old(self._tokens)
         else:
@@ -407,7 +407,7 @@ class CorrectionDatasetGenerator:
         }
 
 
-    def generate_dataset(self, dataset_dir, thread, seed_input):
+    def generate_dataset(self, dataset_dir, thread, seed_input, age):
         tok = ManipulateTokens(self.tokenizer)
         NUM_OF_THREADS = 1
         input_files = sorted(tf.io.gfile.glob(dataset_dir + "/AA/wiki_00_test"))
@@ -436,7 +436,7 @@ class CorrectionDatasetGenerator:
                             tokens = self.tokenizer.tokenize(doc) # tokenize the textblocks between empty lines
                             if not tokens:
                                 continue
-                            all_modified_tokens, all_corrected_tokens = self.run(tokens)
+                            all_modified_tokens, all_corrected_tokens = self.run(tokens, age)
                             input_len = len(all_modified_tokens)
                             for start_index in range(0, input_len, self.seq_length - 2):
                                 modified_tokens = all_modified_tokens[start_index:start_index + self.seq_length - 2]
@@ -455,11 +455,25 @@ class CorrectionDatasetGenerator:
                                                 corrected_tokens_without_PAD[-1].append(corr)
                                             else:
                                                 corrected_tokens_without_PAD[-1].append("")
+                                    error_text_list = []
+                                    correct_text_list = []
+                                    for err_tok, corr_tok in zip(modified_tokens, corrected_tokens):
+                                        if corr_tok[0] == '[PAD]':
+                                            error_text_list.append(err_tok[-1])
+                                            correct_text_list.append(" ")
+                                        elif corr_tok[1] == '[PAD]':
+                                            error_text_list.append(err_tok[-1])
+                                            correct_text_list.append(corr_tok[0][-1])
+                                        elif corr_tok[2] == '[PAD]':
+                                            error_text_list.extend([err_tok[-1], " "])
+                                            correct_text_list.extend([corr_tok[0][-1], corr_tok[1][-1]])
+                                        else:
+                                            error_text_list.extend([err_tok[-1], " ", " "])
+                                            correct_text_list.extend([corr_tok[0][-1], corr_tok[1][-1], corr_tok[2][-1]])
 
-
-                                    print("".join([f"|{item:^11}|" for item in modified_tokens]))
+                                    print(" ".join(error_text_list))
                                     print("-" * 200)
-                                    print("".join([f"|{item1:^3} {item2:^3} {item3:^3}|" for [item1, item2, item3] in corrected_tokens_without_PAD]))
+                                    print(" ".join(correct_text_list))
                                     print("=" * 200)
 
                                     # print(self.corr_gen.error_table)
