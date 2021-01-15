@@ -8,7 +8,10 @@ def tokenizer_hu():
 
 @pytest.fixture
 def old_gen(tokenizer_hu):
-    return correction_dataset_generator.MakeTextOld(tokenizer_hu)
+    old_gen_obj = correction_dataset_generator.MakeTextOld(tokenizer_hu)
+    with open("old_table.txt", encoding="utf-8") as f:
+        old_gen_obj.load_change_table_from_file(f)
+    return old_gen_obj
 
 @pytest.fixture
 def ocr_error_table(tokenizer_hu):

@@ -33,6 +33,8 @@ def main():
     old_text_generator = MakeTextOld(character_tokenizer)
     with open(Path(files_paths["ocr_errors"]), encoding="utf-8") as f:
         ocr_errors_generator.load_table_from_file(f)
+    with open(Path(files_paths["old_table"]), encoding="utf-8") as f:
+        old_text_generator.load_change_table_from_file(f)
     dataset_generator = CorrectionDatasetGenerator(character_tokenizer, ocr_errors_generator, record_params["sequence_length"], old_text_generator)
     output_dir = Path(files_paths["output_file_root"])
     tf.io.gfile.makedirs(str(output_dir))
@@ -46,13 +48,13 @@ def main():
         for inputs, outputs in dataset_generator.generate_dataset(files_paths["dataset_dir"], args.thread, seed_input):
         # for inputs, outputs in tqdm.tqdm(dataset_generator.generate_dataset(files_paths["test_input_dir"])):
             inst_idx += 1
-            feature = OrderedDict()
-            feature['input_ids'] = int64feature(inputs[0])
-            feature['attention_mask'] = int64feature(inputs[1])
-            feature['token_type_ids'] = int64feature(inputs[2])
-            feature['output1'] = int64feature(outputs[0])
-            feature['output2'] = int64feature(outputs[1])
-            feature['output3'] = int64feature(outputs[2])
+    #         feature = OrderedDict()
+    #         feature['input_ids'] = int64feature(inputs[0])
+    #         feature['attention_mask'] = int64feature(inputs[1])
+    #         feature['token_type_ids'] = int64feature(inputs[2])
+    #         feature['output1'] = int64feature(outputs[0])
+    #         feature['output2'] = int64feature(outputs[1])
+    #         feature['output3'] = int64feature(outputs[2])
     #         example = tf.train.Example(features=tf.train.Features(feature=feature))
     #         example_cache.append(example)
 

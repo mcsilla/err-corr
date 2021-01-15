@@ -1,8 +1,9 @@
 {
     "paths": {
-        "vocab_file": "de-vocab",
-        "ocr_errors": "de-ocr-errors",
-        "dataset_dir": "gs://arcanum-ml/nlp/bert/corr/de-input-raw",
+        "vocab_file": "hu-vocab",
+        "ocr_errors": "hu-ocr-errors",
+        "old_table": "hu-old-table",
+        "dataset_dir": "gs://arcanum-ml/nlp/bert/corr/hu-input-raw",
         "output_file_root": "output"
     },
     "records": {

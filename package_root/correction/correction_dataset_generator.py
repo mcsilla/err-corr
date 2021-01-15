@@ -10,8 +10,88 @@ import sys
 import tqdm
 import numpy as np
 import tensorflow as tf
-from useful import ManipulateTokens
+# from useful import ManipulateTokens
 from official.nlp.bert.tokenization import _is_punctuation
+
+class ManipulateTokens:
+
+    def __init__(self, _tokenizer):
+        self.tokenizer = _tokenizer
+
+    def detokenize_char(self, char_token):
+        if char_token.startswith("##"):
+            return char_token[2:]
+        if char_token in set(['[CLS]', '[SEP]', '[MASK]', '[PAD]', '[UNK]']):
+            return char_token
+        if _is_punctuation(char_token):
+            return char_token
+        return (" " + char_token)
+
+    def corrected_tokenizer(sequence, tokenizer, seq_length):
+        ids_object = tokenizer(text="a" + sequence, padding='max_length', max_length=seq_length + 1)
+        for key in ids_object:
+            ids_object[key] = ids_object[key][:1] + ids_object[key][2:]
+        return ids_object
+
+    def tokenize_with_starting_hash(self, sequence):
+        return self.tokenizer.tokenize("a" + sequence)[1:]
+
+
+    def tokenize_all_versions(self, sequence):
+        tokens_versions = [
+            self.tokenizer.tokenize(sequence),
+            self.tokenize_with_starting_hash(sequence),
+            self.tokenizer.tokenize(sequence.upper()),
+            self.tokenize_with_starting_hash(sequence.upper()),
+            self.tokenizer.tokenize(sequence.capitalize()),
+            self.tokenize_with_starting_hash(sequence.capitalize())
+        ]
+        return tuple([self.correct_tokens_with_tokenized_PAD(tokens) for tokens in tokens_versions])
+
+    def tokenize_all_versions_with_starting_hash(self, sequence):
+        tokens_versions = [
+            self.tokenize_with_starting_hash(sequence),
+            self.tokenize_with_starting_hash(sequence.upper()),
+            self.tokenize_with_starting_hash(sequence.capitalize())
+        ]
+        return tuple([self.correct_tokens_with_tokenized_PAD(tokens) for tokens in tokens_versions])
+
+    def tokenize_all_versions_without_starting_hash(self, sequence):
+        tokens_versions = [
+            self.tokenizer.tokenize(sequence),
+            self.tokenizer.tokenize(sequence.upper()),
+            self.tokenizer.tokenize(sequence.capitalize()),
+        ]
+        return tuple([self.correct_tokens_with_tokenized_PAD(tokens) for tokens in tokens_versions])
+
+
+
+    def correct_tokens_with_tokenized_PAD(self, tokenized_chars):
+        corrected_chars = []
+        i = 0
+        # az "[" csak a "[PAD]"-nál szerepelhet az ocr_errors.txt-ben!
+        last_pad = False
+        while i < len(tokenized_chars):
+            next_char = tokenized_chars[i]
+            if next_char == "[":
+                corrected_chars.append("[PAD]")
+                i += 5
+                last_pad = True
+                if i < len(tokenized_chars) and tokenized_chars[i] == "|":
+                    last_pad = False
+                    i += 1
+            elif last_pad == True:
+                corrected_chars.append("##" + next_char)
+                last_pad = False
+                i += 1
+            else:
+                corrected_chars.append(next_char)
+                i += 1
+        return corrected_chars
+
+    def restore_text_from_corrected_tokens(self, corrected_tokens):
+        text = "".join([self.detokenize_char(token) for triple in corrected_tokens for token in triple if token != "[PAD]"])
+        return text
 
 
 class ErrorTable:
@@ -184,8 +264,6 @@ class MakeTextOld:
     def make_tokens_old(self, tokens):
         self._old_tokens = []
         self._correction_to_old_tokens = []
-        with open("old_table.txt", encoding="utf-8") as f:
-            self.load_change_table_from_file(f)
         # print(self.change_table)
         token_idx = 0
         # ezeknél kell csekkolni, hogy a szó végén vannak-e
@@ -195,34 +273,38 @@ class MakeTextOld:
             # make old
             whole_word_found = False
             for i in range(4):
-                if "".join(tokens[token_idx:token_idx + i + 1]).lower() in whole_words and token_idx + i + 1 < len(tokens) and len(tokens[token_idx + i + 1]) == 1 and \
-                    random.random() < float(self.get_frequency(tokens[token_idx:token_idx + i + 1])[0]):
+                tokens_seq = tokens[token_idx:token_idx + i + 1]
+                if "".join(tokens_seq).lower() in whole_words and token_idx + i + 1 < len(tokens) and len(tokens[token_idx + i + 1]) == 1 and \
+                    random.random() < float(self.get_frequency(tokens_seq)[0]):
                     whole_word_found = True
-                    self._old_tokens += self.get_old_version(tokens[token_idx:token_idx + i + 1], self.change_table)[0]
-                    self._correction_to_old_tokens += self.get_corrected_version(tokens[token_idx:token_idx + i + 1], self.change_table)[0]
+                    self._old_tokens += self.get_old_version(tokens_seq, self.change_table)[0]
+                    self._correction_to_old_tokens += self.get_corrected_version(tokens_seq, self.change_table)[0]
                     token_idx += i + 1
                     break
             if whole_word_found:
                 continue
             in_table = []
             for i in reversed(range(4)):
-                if self.get_old_version(tokens[token_idx:token_idx + i + 1], self.change_table):
+                tokens_seq = tokens[token_idx:token_idx + i + 1]
+                if self.get_old_version(tokens_seq, self.change_table):
                     in_table.append(i)
-                    frequency_smaller = float(self.get_frequency(tokens[token_idx:token_idx + i + 1])[0])
+                    frequency_smaller = float(self.get_frequency(tokens_seq)[0])
                     break
             random_num = random.random()
             if in_table and  random_num <  frequency_smaller and "".join(tokens[token_idx:token_idx + in_table[0] + 1]).lower() not in whole_words:
                 i = in_table[0]
-                self._old_tokens += self.get_old_version(tokens[token_idx:token_idx + i + 1], self.change_table)[0]
-                self._correction_to_old_tokens += self.get_corrected_version(tokens[token_idx:token_idx + i + 1], self.change_table)[0]
+                tokens_seq = tokens[token_idx:token_idx + i + 1]
+                self._old_tokens += self.get_old_version(tokens_seq, self.change_table)[0]
+                self._correction_to_old_tokens += self.get_corrected_version(tokens_seq, self.change_table)[0]
                 token_idx += i + 1
                 continue
             if in_table and len(self.get_old_version(tokens[token_idx:token_idx + in_table[0] + 1], self.change_table)) > 1 and \
                 random_num < frequency_smaller + float(self.get_frequency(tokens[token_idx:token_idx + i + 1])[1]) and \
                     "".join(tokens[token_idx:token_idx + in_table[0] + 1]).lower() not in whole_words:
                 i = in_table[0]
-                self._old_tokens += self.get_old_version(tokens[token_idx:token_idx + i + 1], self.change_table)[1]
-                self._correction_to_old_tokens += self.get_corrected_version(tokens[token_idx:token_idx + i + 1], self.change_table)[1]
+                tokens_seq = tokens[token_idx:token_idx + i + 1]
+                self._old_tokens += self.get_old_version(tokens_seq, self.change_table)[1]
+                self._correction_to_old_tokens += self.get_corrected_version(tokens_seq, self.change_table)[1]
                 token_idx += i + 1
                 continue
 
@@ -235,7 +317,7 @@ class CorrectionDatasetGenerator:
     error_frequency = 0.15
     sparse_frequency = 0.2
     dense_frequency = 0.2
-    old_frequency = 0.06
+    old_frequency = 0.05
     common_extra_chars = "{}jli;|\\/(:)!1.t'"
     hyphens = "\xad-"
 
@@ -419,19 +501,27 @@ class CorrectionDatasetGenerator:
 
     def generate_dataset(self, dataset_dir, thread, seed_input):
         tok = ManipulateTokens(self.tokenizer)
-        NUM_OF_THREADS = 1
-        input_files = sorted(tf.io.gfile.glob(dataset_dir + "/AA/wiki_00_test"))
-        # input_files = sorted(tf.io.gfile.glob(dataset_dir + "/*/wiki_*"))
-        random.seed(42)
+        NUM_OF_THREADS = 16
+        # input_files = sorted(tf.io.gfile.glob(dataset_dir + "/*"))
+        # input_files = sorted(tf.io.gfile.glob(dataset_dir + "/AA/wiki_00_test"))
+        input_files = sorted(tf.io.gfile.glob(dataset_dir + "/AA/wiki_*"))
+        # random.seed(42)
         #random.shuffle(input_files)
         # input_files = tf.io.gfile.glob(dataset_dir + "/*")
-        thread_input_length = len(input_files) // NUM_OF_THREADS
-        if (len(input_files) % NUM_OF_THREADS):
-            thread_input_length += 1 
-        thread_start = (thread - 1) * thread_input_length
-        thread_input_files = input_files[thread_start:thread_start + thread_input_length]
+
+        thread_input_lengths = [1] * 11 + [2] * 5
+        thread_start = (thread - 1) * thread_input_lengths[thread - 1]
+        thread_input_files = input_files[thread_start:thread_start + thread_input_lengths[thread - 1]]
+
+        print(thread_input_files)
+
+        # thread_input_length = len(input_files) // NUM_OF_THREADS
+        # if (len(input_files) % NUM_OF_THREADS):
+        #     thread_input_length += 1 
+        # thread_start = (thread - 1) * thread_input_length
+        # thread_input_files = input_files[thread_start:thread_start + thread_input_length]
         # print(thread_input_files)
-        open("/home/mcsilla/machine_learning/gitrepos/err-corr/test_output.txt", 'w').close()
+        # open("/home/mcsilla/machine_learning/gitrepos/err-corr/test_output.txt", 'w').close()
         for input_file in tqdm.tqdm(thread_input_files):
             with tf.io.gfile.GFile(input_file, mode='r') as inf:
                 document_lines = []
@@ -457,47 +547,47 @@ class CorrectionDatasetGenerator:
                                 corrected_tokens = all_corrected_tokens[start_index:start_index + self.seq_length - 2]
                                 inputs = self.create_input(modified_tokens)
                                 labels = self.create_label(corrected_tokens)
-                                with open("/home/mcsilla/machine_learning/gitrepos/err-corr/test_output.txt", "a") as f:
-                                    standard_out = sys.stdout
-                                    sys.stdout = f
+                                # with open("/home/mcsilla/machine_learning/gitrepos/err-corr/test_output.txt", "a") as f:
+                                #     standard_out = sys.stdout
+                                #     sys.stdout = f
 
-                                    corrected_tokens_without_PAD = []
-                                    for item in corrected_tokens:
-                                        corrected_tokens_without_PAD.append([])
-                                        for corr in item:
-                                            if corr != "[PAD]":
-                                                corrected_tokens_without_PAD[-1].append(corr)
-                                            else:
-                                                corrected_tokens_without_PAD[-1].append("")
-                                    error_text_list = []
-                                    correct_text_list = []
-                                    for err_tok, corr_tok in zip(modified_tokens, corrected_tokens):
-                                        if corr_tok[0] == '[PAD]':
-                                            error_text_list.append(err_tok[-1])
-                                            correct_text_list.append(" ")
-                                        elif corr_tok[1] == '[PAD]':
-                                            error_text_list.append(err_tok[-1])
-                                            correct_text_list.append(corr_tok[0][-1])
-                                        elif corr_tok[2] == '[PAD]':
-                                            error_text_list.extend([err_tok[-1], " "])
-                                            correct_text_list.extend([corr_tok[0][-1], corr_tok[1][-1]])
-                                        else:
-                                            error_text_list.extend([err_tok[-1], " ", " "])
-                                            correct_text_list.extend([corr_tok[0][-1], corr_tok[1][-1], corr_tok[2][-1]])
+                                #     corrected_tokens_without_PAD = []
+                                #     for item in corrected_tokens:
+                                #         corrected_tokens_without_PAD.append([])
+                                #         for corr in item:
+                                #             if corr != "[PAD]":
+                                #                 corrected_tokens_without_PAD[-1].append(corr)
+                                #             else:
+                                #                 corrected_tokens_without_PAD[-1].append("")
+                                #     error_text_list = []
+                                #     correct_text_list = []
+                                #     for err_tok, corr_tok in zip(modified_tokens, corrected_tokens):
+                                #         if corr_tok[0] == '[PAD]':
+                                #             error_text_list.append(err_tok[-1])
+                                #             correct_text_list.append(" ")
+                                #         elif corr_tok[1] == '[PAD]':
+                                #             error_text_list.append(err_tok[-1])
+                                #             correct_text_list.append(corr_tok[0][-1])
+                                #         elif corr_tok[2] == '[PAD]':
+                                #             error_text_list.extend([err_tok[-1], " "])
+                                #             correct_text_list.extend([corr_tok[0][-1], corr_tok[1][-1]])
+                                #         else:
+                                #             error_text_list.extend([err_tok[-1], " ", " "])
+                                #             correct_text_list.extend([corr_tok[0][-1], corr_tok[1][-1], corr_tok[2][-1]])
 
-                                    print(" ".join(error_text_list))
-                                    print("-" * 200)
-                                    print(" ".join(correct_text_list))
-                                    print("=" * 200)
+                                #     print(" ".join(error_text_list))
+                                #     print("-" * 200)
+                                #     print(" ".join(correct_text_list))
+                                #     print("=" * 200)
 
-                                    # print(self.corr_gen.error_table)
-                                    # print("".join([tok.detokenize_char(token) for token in modified_tokens]))
-                                    # print(tok.restore_text_from_corrected_tokens(corrected_tokens))
-                                    # print(inputs["input_ids"], "\n", inputs["attention_mask"], "\n", inputs["token_type_ids"], "\n\n",\
-                                    # labels["label_0"], "\n", labels["label_1"], "\n", labels["label_2"], "\n\n")
-                                    # print(modified_tokens)
-                                    # print(corrected_tokens)
-                                    sys.stdout = standard_out
+                                #     # print(self.corr_gen.error_table)
+                                #     # print("".join([tok.detokenize_char(token) for token in modified_tokens]))
+                                #     # print(tok.restore_text_from_corrected_tokens(corrected_tokens))
+                                #     # print(inputs["input_ids"], "\n", inputs["attention_mask"], "\n", inputs["token_type_ids"], "\n\n",\
+                                #     # labels["label_0"], "\n", labels["label_1"], "\n", labels["label_2"], "\n\n")
+                                #     # print(modified_tokens)
+                                #     # print(corrected_tokens)
+                                #     sys.stdout = standard_out
                                 yield (inputs["input_ids"], inputs["attention_mask"], inputs["token_type_ids"]), \
                                     (labels["label_0"], labels["label_1"], labels["label_2"])
                     else:
@@ -509,6 +599,7 @@ def int64feature(int_list):
 
 
 def printable_format(tokenizer, token_ids):
+    tok = ManipulateTokens(tokenizer)
     tokens = tokenizer.convert_ids_to_tokens([token_id for token_id in token_ids if token_id >= 0])
     return "".join([tok.detokenize_char(token) for token in tokens])
 
