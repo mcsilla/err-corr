@@ -267,11 +267,13 @@ class MakeTextOld:
         # print(self.change_table)
         token_idx = 0
         # ezeknél kell csekkolni, hogy a szó végén vannak-e
-        whole_words = ["a", "é##s", "i##s", "##b##b", "v##o##l##t"]
+        whole_words = ["a", "é##s", "i##s", "##b##b", "v##o##l##t", "##k##é##n##t", "##b##e##l##i"] # utánuk új szó kezdődik
+        prefixes = ["e##l", "m##e##g", "f##e##l", "b##e", "l##e##g"] # utánuk folytatódik még a szó
         # print(self.corr_gen.correct_tokenizer(self.tokenizer.tokenize("T[PAD][PAD]TY")))
         while token_idx < len(tokens):
             # make old
             whole_word_found = False
+            prefix_found = False
             for i in range(4):
                 tokens_seq = tokens[token_idx:token_idx + i + 1]
                 if "".join(tokens_seq).lower() in whole_words and token_idx + i + 1 < len(tokens) and len(tokens[token_idx + i + 1]) == 1 and \
@@ -283,6 +285,17 @@ class MakeTextOld:
                     break
             if whole_word_found:
                 continue
+            for i in range(1, 3):
+                tokens_seq = tokens[token_idx:token_idx + i + 1]
+                if "".join(tokens_seq).lower() in prefixes and token_idx + i + 1 < len(tokens) and len(tokens[token_idx + i + 1]) == 3 and \
+                    random.random() < float(self.get_frequency(tokens_seq)[0]):
+                    prefix_found = True
+                    self._old_tokens += self.get_old_version(tokens_seq, self.change_table)[0]
+                    self._correction_to_old_tokens += self.get_corrected_version(tokens_seq, self.change_table)[0]
+                    token_idx += i + 1
+                    break
+            if prefix_found:
+                continue
             in_table = []
             for i in reversed(range(4)):
                 tokens_seq = tokens[token_idx:token_idx + i + 1]
@@ -291,7 +304,7 @@ class MakeTextOld:
                     frequency_smaller = float(self.get_frequency(tokens_seq)[0])
                     break
             random_num = random.random()
-            if in_table and  random_num <  frequency_smaller and "".join(tokens[token_idx:token_idx + in_table[0] + 1]).lower() not in whole_words:
+            if in_table and  random_num <  frequency_smaller and "".join(tokens[token_idx:token_idx + in_table[0] + 1]).lower() not in whole_words + prefixes:
                 i = in_table[0]
                 tokens_seq = tokens[token_idx:token_idx + i + 1]
                 self._old_tokens += self.get_old_version(tokens_seq, self.change_table)[0]
@@ -300,7 +313,7 @@ class MakeTextOld:
                 continue
             if in_table and len(self.get_old_version(tokens[token_idx:token_idx + in_table[0] + 1], self.change_table)) > 1 and \
                 random_num < frequency_smaller + float(self.get_frequency(tokens[token_idx:token_idx + i + 1])[1]) and \
-                    "".join(tokens[token_idx:token_idx + in_table[0] + 1]).lower() not in whole_words:
+                    "".join(tokens[token_idx:token_idx + in_table[0] + 1]).lower() not in whole_words + prefixes:
                 i = in_table[0]
                 tokens_seq = tokens[token_idx:token_idx + i + 1]
                 self._old_tokens += self.get_old_version(tokens_seq, self.change_table)[1]
@@ -502,9 +515,9 @@ class CorrectionDatasetGenerator:
     def generate_dataset(self, dataset_dir, thread, seed_input):
         tok = ManipulateTokens(self.tokenizer)
         NUM_OF_THREADS = 16
-        # input_files = sorted(tf.io.gfile.glob(dataset_dir + "/*"))
+        input_files = sorted(tf.io.gfile.glob(dataset_dir + "/*"))
         # input_files = sorted(tf.io.gfile.glob(dataset_dir + "/AA/wiki_00_test"))
-        input_files = sorted(tf.io.gfile.glob(dataset_dir + "/AA/wiki_*"))
+        # input_files = sorted(tf.io.gfile.glob(dataset_dir + "/AA/wiki_*"))
         # random.seed(42)
         #random.shuffle(input_files)
         # input_files = tf.io.gfile.glob(dataset_dir + "/*")
