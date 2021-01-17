@@ -267,7 +267,7 @@ class MakeTextOld:
         # print(self.change_table)
         token_idx = 0
         # ezeknél kell csekkolni, hogy a szó végén vannak-e
-        whole_words = ["a", "é##s", "i##s", "##b##b", "v##o##l##t", "##k##é##n##t", "##b##e##l##i"] # utánuk új szó kezdődik
+        whole_words = ["a", "é##s", "i##s", "##b##b", "v##o##l##t", "##k##é##n##t", "##b##e##l##i", "n##e##m", "n##e"] # utánuk új szó kezdődik
         prefixes = ["e##l", "m##e##g", "f##e##l", "b##e", "l##e##g"] # utánuk folytatódik még a szó
         # print(self.corr_gen.correct_tokenizer(self.tokenizer.tokenize("T[PAD][PAD]TY")))
         while token_idx < len(tokens):
